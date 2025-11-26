@@ -19,6 +19,7 @@ interface Task {
   addedBy: string;
   lastUpdatedBy?: string;
   lastModified: number;
+  deleted?: boolean;
 }
 
 export default function TaskTracker() {
@@ -35,8 +36,12 @@ export default function TaskTracker() {
   const [restoring, setRestoring] = useState(false);
   const [restoreURL, setRestoreURL] = useState("");
   const [showCloudPanel, setShowCloudPanel] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
   const [synced, setSynced] = useState(true);
   const [showSyncToast, setShowSyncToast] = useState(false);
+
+  const [lastSynced, setLastSynced] = useState<number | null>(null);
+  const [syncHistory, setSyncHistory] = useState<{ time: number; status: string }[]>([]);
 
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -82,7 +87,6 @@ export default function TaskTracker() {
     };
   }, [blobPublicFile]);
 
-  /* === Core functions === */
   const addTask = () => {
     if (!input.trim() || !addedBy.trim()) return;
     const newTask: Task = {
@@ -113,13 +117,28 @@ export default function TaskTracker() {
   };
 
   const deleteTask = (id: number) => {
-    const updatedTasks = tasks.filter((t) => t.id !== id);
+    const updatedTasks = tasks.map((t) =>
+      t.id === id
+        ? {
+            ...t,
+            deleted: true,
+            lastUpdatedBy: addedBy || "Unknown",
+            lastModified: Date.now(),
+          }
+        : t
+    );
     setTasks(updatedTasks);
   };
 
-  const dailyTasks = tasks.filter((t) => t.type === "daily");
-  const weeklyTasks = tasks.filter((t) => t.type === "weekly");
-  const buyTasks = tasks.filter((t) => t.type === "buy");
+  const dailyTasks = tasks.filter(
+    (t) => t.type === "daily" && (showDeleted || !t.deleted)
+  );
+  const weeklyTasks = tasks.filter(
+    (t) => t.type === "weekly" && (showDeleted || !t.deleted)
+  );
+  const buyTasks = tasks.filter(
+    (t) => t.type === "buy" && (showDeleted || !t.deleted)
+  );
 
   const sections = [
     { label: "Daily Tasks", id: "daily", color: "#3aa0ff", list: dailyTasks },
@@ -128,7 +147,6 @@ export default function TaskTracker() {
   ];
   const activeSection = sections.find((s) => s.id === activeTab)!;
 
-  /* === Cloud functions === */
   const saveTasksToBlob = async (silent = false) => {
     if (tasks.length === 0) {
       if (!silent) alert("❌ No tasks to backup.");
@@ -146,6 +164,13 @@ export default function TaskTracker() {
       });
       const data = await res.json();
       if (data.url) {
+        const now = Date.now();
+        setLastSynced(now);
+        setSyncHistory((prev) => [
+          { time: now, status: "success" },
+          ...prev.slice(0, 4),
+        ]);
+
         console.log("✅ Synced to:", data.url);
         localStorage.setItem("blobPublicFile", data.url);
         setBlobPublicFile(data.url);
@@ -155,6 +180,11 @@ export default function TaskTracker() {
     } catch (e) {
       console.error(e);
       setSynced(false);
+      const now = Date.now();
+      setSyncHistory((prev) => [
+        { time: now, status: "error" },
+        ...prev.slice(0, 4),
+      ]);
     } finally {
       setUploading(false);
     }
@@ -171,32 +201,40 @@ export default function TaskTracker() {
       if (!res.ok) return;
 
       const cloudData: Task[] = await res.json();
-      let merged = [...tasks];
+      const mergedMap = new Map<number, Task>();
 
-      for (const remoteTask of cloudData) {
-        const localMatch = merged.find((t) => t.id === remoteTask.id);
-        if (!localMatch) {
-          merged.push(remoteTask);
-        } else if (
-          remoteTask.lastModified &&
-          remoteTask.lastModified > (localMatch.lastModified || 0)
-        ) {
-          merged = merged.map((t) =>
-            t.id === remoteTask.id ? remoteTask : t
-          );
+      const allTasks = [...tasks, ...cloudData];
+      for (const t of allTasks) {
+        const existing = mergedMap.get(t.id);
+        if (!existing || t.lastModified > existing.lastModified) {
+          mergedMap.set(t.id, t);
         }
       }
 
-      const mergedString = JSON.stringify(merged);
+      const merged = Array.from(mergedMap.values());
+      const visibleTasks = merged.filter((t) => !t.deleted);
+
+      const mergedString = JSON.stringify(visibleTasks);
       if (mergedString !== JSON.stringify(tasks)) {
-        setTasks(merged);
+        setTasks(visibleTasks);
         setSynced(true);
         triggerSyncToast();
-        console.log("🔄 Merged cloud + local tasks successfully");
+        const now = Date.now();
+        setLastSynced(now);
+        setSyncHistory((prev) => [
+          { time: now, status: "success" },
+          ...prev.slice(0, 4),
+        ]);
+        console.log("🔄 Merged cloud + local tasks successfully (deletion-safe)");
       }
     } catch (err) {
       console.error("Cloud fetch failed:", err);
       setSynced(false);
+      const now = Date.now();
+      setSyncHistory((prev) => [
+        { time: now, status: "error" },
+        ...prev.slice(0, 4),
+      ]);
     }
   };
 
@@ -227,7 +265,18 @@ export default function TaskTracker() {
     setTimeout(() => setShowSyncToast(false), 2500);
   };
 
-  /* === UI === */
+  useEffect(() => {
+    const cleanup = () => {
+      const now = Date.now();
+      const cleaned = tasks.filter(
+        (t) => !(t.deleted && now - t.lastModified > 24 * 60 * 60 * 1000)
+      );
+      if (cleaned.length !== tasks.length) setTasks(cleaned);
+    };
+    const interval = setInterval(cleanup, 60000);
+    return () => clearInterval(interval);
+  }, [tasks]);
+
   return (
     <div className="space-y-8">
       <motion.div
@@ -252,137 +301,7 @@ export default function TaskTracker() {
         </p>
       </motion.div>
 
-      <div className="flex gap-3 justify-center mb-6">
-        {sections.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as "daily" | "weekly" | "buy")}
-            className={`px-4 py-2 rounded-md font-orbitron uppercase tracking-wider transition-all duration-300 ${
-              activeTab === tab.id
-                ? "bg-opacity-90"
-                : "bg-opacity-20 hover:bg-opacity-30"
-            }`}
-            style={{
-              backgroundColor:
-                activeTab === tab.id ? `${tab.color}22` : "transparent",
-              border:
-                activeTab === tab.id
-                  ? `1px solid ${tab.color}55`
-                  : "1px solid rgba(255,255,255,0.1)",
-              color: activeTab === tab.id ? tab.color : "#ffffff",
-              boxShadow:
-                activeTab === tab.id ? `0 0 8px ${tab.color}55` : "none",
-            }}
-          >
-            {tab.label.split(" ")[0]}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap gap-3 justify-center mb-6">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={`Add ${type} item...`}
-          className="flex-1 p-3 rounded-lg bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3aa0ff] max-w-md"
-        />
-        <input
-          value={addedBy}
-          onChange={(e) => setAddedBy(e.target.value)}
-          placeholder="Added by..."
-          className="p-3 rounded-lg bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#9b59b6]"
-          style={{ width: "130px" }}
-        />
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value as "daily" | "weekly" | "buy")}
-          className="p-3 rounded-lg bg-[#1e2229] text-white border border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#3aa0ff]"
-        >
-          <option value="daily">Daily</option>
-          <option value="weekly">Weekly</option>
-          <option value="buy">Buy</option>
-        </select>
-        <button
-          onClick={addTask}
-          className="neon-button flex items-center gap-2 hover:scale-105 transition-transform duration-200"
-        >
-          <PlusCircle size={18} /> Add
-        </button>
-      </div>
-
-      <motion.div
-        key={activeSection.id}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="max-w-2xl mx-auto"
-      >
-        <h3
-          className="font-orbitron text-xl mb-4 text-center"
-          style={{
-            color: activeSection.color,
-            textShadow: `0 0 10px ${activeSection.color}66`,
-          }}
-        >
-          {activeSection.label}
-        </h3>
-
-        <AnimatePresence>
-          {activeSection.list.map((task) => (
-            <motion.div
-              key={task.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className="glass-card p-4 flex justify-between items-center mb-2"
-            >
-              <div>
-                <span
-                  onClick={() => toggleTask(task.id)}
-                  className="cursor-pointer select-none transition-all duration-200 block"
-                  style={{
-                    color: task.done ? "#aaaaaa" : "#ffffff",
-                    textShadow: task.done
-                      ? "none"
-                      : "0 0 6px rgba(255,255,255,0.4)",
-                    fontWeight: 500,
-                  }}
-                >
-                  {task.text}
-                </span>
-                <p className="text-xs text-gray-400 mt-1">
-                  Added by: <span className="text-[#3aa0ff]">{task.addedBy}</span>{" "}
-                  {task.lastUpdatedBy && (
-                    <>
-                      • Updated by:{" "}
-                      <span className="text-[#9b59b6]">{task.lastUpdatedBy}</span>
-                    </>
-                  )}
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => toggleTask(task.id)}
-                  className="hover:scale-110 transition-transform"
-                >
-                  <CheckCircle
-                    size={20}
-                    className={task.done ? "text-[#44ff9a]" : "text-gray-400"}
-                  />
-                </button>
-                <button
-                  onClick={() => deleteTask(task.id)}
-                  className="hover:scale-110 transition-transform"
-                >
-                  <Trash2 size={20} className="text-[#ff6b6b]" />
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </motion.div>
-
+      {/* ===== Cloud Panel ===== */}
       <div className="fixed bottom-6 right-6 z-50">
         <motion.div
           initial={false}
@@ -412,29 +331,45 @@ export default function TaskTracker() {
                   <X size={16} />
                 </button>
               </div>
-              <button
-                onClick={() => saveTasksToBlob(false)}
-                disabled={uploading}
-                className="neon-button flex items-center justify-center gap-2 w-full"
-              >
-                <CloudUpload size={16} />
-                {uploading ? "Uploading..." : "Save Backup"}
-              </button>
-              <input
-                type="text"
-                value={restoreURL}
-                onChange={(e) => setRestoreURL(e.target.value)}
-                placeholder="Paste backup URL..."
-                className="w-full p-2 rounded bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#44ff9a]"
-              />
-              <button
-                onClick={restoreTasksFromBlob}
-                disabled={restoring}
-                className="neon-button flex items-center justify-center gap-2 w-full bg-[#44ff9a22]"
-              >
-                <CloudDownload size={16} />
-                {restoring ? "Restoring..." : "Restore"}
-              </button>
+
+              {/* === Sync Info Display === */}
+              {lastSynced && (
+                <p className="text-xs text-gray-400 font-mono">
+                  Last synced:{" "}
+                  <motion.span
+                    key={lastSynced}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.5 }}
+                    className="text-[#44ff9a]"
+                  >
+                    {new Date(lastSynced).toLocaleTimeString()}
+                  </motion.span>
+                </p>
+              )}
+
+              {/* === Mini Sync History === */}
+              {syncHistory.length > 0 && (
+                <div className="mt-2 border-t border-gray-700 pt-2">
+                  <p className="text-xs text-gray-400 mb-1">Sync History:</p>
+                  <div className="max-h-20 overflow-y-auto text-xs font-mono text-gray-300 space-y-1">
+                    {syncHistory.map((entry, i) => (
+                      <div key={i}>
+                        <span
+                          className={`${
+                            entry.status === "success"
+                              ? "text-[#44ff9a]"
+                              : "text-[#ff6b6b]"
+                          }`}
+                        >
+                          {entry.status.toUpperCase()}
+                        </span>{" "}
+                        — {new Date(entry.time).toLocaleTimeString()}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <button
@@ -447,21 +382,6 @@ export default function TaskTracker() {
           )}
         </motion.div>
       </div>
-
-      <AnimatePresence>
-        {showSyncToast && (
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 40 }}
-            transition={{ duration: 0.4 }}
-            className="fixed bottom-24 right-6 bg-[#1e1f26dd] border border-[#44ff9a55] px-4 py-2 rounded-lg shadow-lg text-white font-orbitron text-sm backdrop-blur-md"
-            style={{ textShadow: "0 0 8px #44ff9a" }}
-          >
-            ☁ Synced just now
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
