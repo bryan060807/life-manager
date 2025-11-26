@@ -1,7 +1,6 @@
 import { put } from "@vercel/blob";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-// ✅ Correct runtime flag
 export const config = {
   runtime: "nodejs",
 };
@@ -18,17 +17,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: "Missing filename or content" });
     }
 
-    // Upload file to Vercel Blob
+    // Log to verify your environment variable is loaded
+    console.log("Using Blob token:", process.env.BLOB_READ_WRITE_TOKEN ? "✅ Found" : "❌ Missing");
+
+    // Upload JSON to your blob store
     const blob = await put(filename, content, {
       access: "public",
       addRandomSuffix: false,
+      token: process.env.BLOB_READ_WRITE_TOKEN, // ✅ explicitly pass the token
     });
 
     console.log("✅ Blob uploaded successfully:", blob.url);
-
     return res.status(200).json({ url: blob.url });
   } catch (error: any) {
-    console.error("❌ Upload failed:", error.message || error);
+    console.error("❌ Upload failed:", error);
     return res.status(500).json({
       error: error.message || "Internal Server Error",
     });
