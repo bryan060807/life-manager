@@ -9,6 +9,9 @@ import {
   CloudDownload,
   X,
   Wifi,
+  Broom,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 interface Task {
@@ -39,9 +42,10 @@ export default function TaskTracker() {
   const [showDeleted, setShowDeleted] = useState(false);
   const [synced, setSynced] = useState(true);
   const [showSyncToast, setShowSyncToast] = useState(false);
-
+  const [toastMessage, setToastMessage] = useState("☁ Synced just now");
   const [lastSynced, setLastSynced] = useState<number | null>(null);
   const [syncHistory, setSyncHistory] = useState<{ time: number; status: string }[]>([]);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
 
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -54,12 +58,22 @@ export default function TaskTracker() {
       "https://ncb7nshm67uygsmd.public.blob.vercel-storage.com/tasks-latest.json"
   );
 
-  /* === Local storage persistence === */
+  const deviceId = useRef<string>(
+    localStorage.getItem("deviceId") || crypto.randomUUID()
+  );
+  useEffect(() => localStorage.setItem("deviceId", deviceId.current), []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) root.classList.add("dark");
+    else root.classList.remove("dark");
+    localStorage.setItem("theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
+
   useEffect(() => {
     localStorage.setItem("tasks", JSON.stringify(tasks));
   }, [tasks]);
 
-  /* === Autosave debounce === */
   useEffect(() => {
     if (tasks.length > 0) {
       if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -67,12 +81,11 @@ export default function TaskTracker() {
     }
   }, [tasks]);
 
-  /* === Adaptive sync loop === */
   useEffect(() => {
     const scheduleSync = () => {
       const now = Date.now();
       const idle = now - lastInteraction.current > 20000;
-      const interval = idle ? 20000 : 5000;
+      const interval = idle ? 20000 : 7000;
       if (syncInterval.current) clearInterval(syncInterval.current);
       syncInterval.current = setInterval(fetchLatestFromBlob, interval);
     };
@@ -87,7 +100,6 @@ export default function TaskTracker() {
     };
   }, [blobPublicFile]);
 
-  /* === Core functions === */
   const addTask = () => {
     if (!input.trim() || !addedBy.trim()) return;
     const newTask: Task = {
@@ -106,12 +118,7 @@ export default function TaskTracker() {
   const toggleTask = (id: number) => {
     const updatedTasks = tasks.map((t) =>
       t.id === id
-        ? {
-            ...t,
-            done: !t.done,
-            lastUpdatedBy: addedBy || "Unknown",
-            lastModified: Date.now(),
-          }
+        ? { ...t, done: !t.done, lastUpdatedBy: addedBy || "Unknown", lastModified: Date.now() }
         : t
     );
     setTasks(updatedTasks);
@@ -120,22 +127,21 @@ export default function TaskTracker() {
   const deleteTask = (id: number) => {
     const updatedTasks = tasks.map((t) =>
       t.id === id
-        ? {
-            ...t,
-            deleted: true,
-            lastUpdatedBy: addedBy || "Unknown",
-            lastModified: Date.now(),
-          }
+        ? { ...t, deleted: true, lastUpdatedBy: addedBy || "Unknown", lastModified: Date.now() }
         : t
     );
     setTasks(updatedTasks);
   };
 
+  const purgeDeleted = async () => {
+    const cleaned = tasks.filter((t) => !t.deleted);
+    setTasks(cleaned);
+    await saveTasksToBlob(false);
+    alert("🧹 Deleted tasks permanently removed.");
+  };
+
   const restoreTasksFromBlob = async () => {
-    if (!restoreURL.trim()) {
-      alert("❌ Please enter a valid backup URL first.");
-      return;
-    }
+    if (!restoreURL.trim()) return alert("❌ Enter a valid backup URL first.");
     setRestoring(true);
     try {
       const res = await fetch(restoreURL);
@@ -153,59 +159,44 @@ export default function TaskTracker() {
     }
   };
 
-  const dailyTasks = tasks.filter(
-    (t) => t.type === "daily" && (showDeleted || !t.deleted)
-  );
-  const weeklyTasks = tasks.filter(
-    (t) => t.type === "weekly" && (showDeleted || !t.deleted)
-  );
-  const buyTasks = tasks.filter(
-    (t) => t.type === "buy" && (showDeleted || !t.deleted)
-  );
-
   const sections = [
-    { label: "Daily Tasks", id: "daily", color: "#3aa0ff", list: dailyTasks },
-    { label: "Weekly Goals", id: "weekly", color: "#9b59b6", list: weeklyTasks },
-    { label: "Things to Buy", id: "buy", color: "#44ff9a", list: buyTasks },
+    { label: "Daily Tasks", id: "daily", color: "#3aa0ff", list: tasks.filter((t) => t.type === "daily" && (showDeleted || !t.deleted)) },
+    { label: "Weekly Goals", id: "weekly", color: "#9b59b6", list: tasks.filter((t) => t.type === "weekly" && (showDeleted || !t.deleted)) },
+    { label: "Things to Buy", id: "buy", color: "#44ff9a", list: tasks.filter((t) => t.type === "buy" && (showDeleted || !t.deleted)) },
   ];
   const activeSection = sections.find((s) => s.id === activeTab)!;
 
-  /* === Cloud Sync === */
   const saveTasksToBlob = async (silent = false) => {
-    if (tasks.length === 0) {
-      if (!silent) alert("❌ No tasks to backup.");
-      return;
-    }
+    if (tasks.length === 0) return;
     setUploading(true);
     try {
+      const payload = {
+        meta: { deviceId: deviceId.current, lastSyncedAt: Date.now() },
+        tasks,
+      };
       const res = await fetch(blobUploadAPI, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           filename: "tasks-latest.json",
-          content: JSON.stringify(tasks, null, 2),
+          content: JSON.stringify(payload, null, 2),
         }),
       });
       const data = await res.json();
       if (data.url) {
-        const now = Date.now();
-        setLastSynced(now);
-        setSyncHistory((prev) => [
-          { time: now, status: "success" },
-          ...prev.slice(0, 4),
-        ]);
+        setSynced(true);
+        setLastSynced(Date.now());
         localStorage.setItem("blobPublicFile", data.url);
         setBlobPublicFile(data.url);
-        setSynced(true);
+        setSyncHistory((prev) => [{ time: Date.now(), status: "success" }, ...prev.slice(0, 4)]);
+        if (!silent) {
+          setToastMessage("☁ Cloud backup saved.");
+          triggerSyncToast();
+        }
       }
     } catch (e) {
       console.error(e);
       setSynced(false);
-      const now = Date.now();
-      setSyncHistory((prev) => [
-        { time: now, status: "error" },
-        ...prev.slice(0, 4),
-      ]);
     } finally {
       setUploading(false);
     }
@@ -213,44 +204,29 @@ export default function TaskTracker() {
 
   const autoSaveToBlob = async () => await saveTasksToBlob(true);
 
-  /* === Merge + Deletion Lock === */
   const fetchLatestFromBlob = async () => {
     try {
       const res = await fetch(blobPublicFile + "?_=" + Date.now());
       if (!res.ok) return;
-
-      const cloudData: Task[] = await res.json();
+      const cloudPackage = await res.json();
+      const cloudData: Task[] = cloudPackage.tasks || [];
       const mergedMap = new Map<number, Task>();
-
       [...tasks, ...cloudData].forEach((t) => {
         const existing = mergedMap.get(t.id);
-        if (!existing) {
-          mergedMap.set(t.id, t);
-        } else {
+        if (!existing) mergedMap.set(t.id, t);
+        else {
           const newer = t.lastModified > existing.lastModified ? t : existing;
-          if (t.deleted || existing.deleted) {
-            mergedMap.set(t.id, { ...newer, deleted: true });
-          } else {
-            mergedMap.set(t.id, newer);
-          }
+          if (t.deleted || existing.deleted) mergedMap.set(t.id, { ...newer, deleted: true });
+          else mergedMap.set(t.id, newer);
         }
       });
-
       const merged = Array.from(mergedMap.values());
-      setTasks(merged);
-
-      await saveTasksToBlob(true);
-
-      setSynced(true);
-      triggerSyncToast();
-      const now = Date.now();
-      setLastSynced(now);
-      setSyncHistory((prev) => [
-        { time: now, status: "success" },
-        ...prev.slice(0, 4),
-      ]);
-
-      console.log("🔄 Merged + synced deletions successfully.");
+      if (JSON.stringify(merged) !== JSON.stringify(tasks)) {
+        setTasks(merged);
+        setToastMessage("⚡ Remote changes merged.");
+        triggerSyncToast();
+        await saveTasksToBlob(true);
+      }
     } catch (err) {
       console.error("Cloud fetch failed:", err);
       setSynced(false);
@@ -259,18 +235,25 @@ export default function TaskTracker() {
 
   const triggerSyncToast = () => {
     setShowSyncToast(true);
-    setTimeout(() => setShowSyncToast(false), 2500);
+    setTimeout(() => setShowSyncToast(false), 3000);
   };
 
-  /* === UI === */
   return (
-    <div className="space-y-8">
+    <div className="relative space-y-8">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8 }}
-        className="text-center mb-6"
+        className="text-center mb-6 relative"
       >
+        <button
+          onClick={() => setDarkMode(!darkMode)}
+          className="absolute top-6 left-6 p-3 rounded-full bg-[#1e2229] text-white hover:scale-110 transition-transform"
+          title="Toggle Theme"
+        >
+          {darkMode ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} className="text-blue-300" />}
+        </button>
+
         <h1
           className="font-orbitron text-3xl md:text-4xl text-white mb-2 tracking-wide"
           style={{
@@ -283,213 +266,98 @@ export default function TaskTracker() {
           AIBBRY’s Task Tracker
         </h1>
         <p className="text-gray-300 italic text-base tracking-wide">
-          Synced across your devices in real-time ☁️💫
+          Quantum-synced across all your devices ☁️⚡
         </p>
-      </motion.div>
 
-      <div className="flex gap-3 justify-center mb-6">
-        {sections.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`px-4 py-2 rounded-md font-orbitron uppercase tracking-wider transition-all duration-300 ${
-              activeTab === tab.id
-                ? "bg-opacity-90"
-                : "bg-opacity-20 hover:bg-opacity-30"
-            }`}
-            style={{
-              backgroundColor: activeTab === tab.id ? `${tab.color}22` : "transparent",
-              border: `1px solid ${tab.color}55`,
-              color: activeTab === tab.id ? tab.color : "#fff",
-              boxShadow:
-                activeTab === tab.id ? `0 0 8px ${tab.color}55` : "none",
-            }}
-          >
-            {tab.label.split(" ")[0]}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap gap-3 justify-center mb-6">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={`Add ${type} item...`}
-          className="flex-1 p-3 rounded-lg bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3aa0ff] max-w-md"
-        />
-        <input
-          value={addedBy}
-          onChange={(e) => setAddedBy(e.target.value)}
-          placeholder="Added by..."
-          className="p-3 rounded-lg bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#9b59b6]"
-          style={{ width: "130px" }}
-        />
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value as any)}
-          className="p-3 rounded-lg bg-[#1e2229] text-white border border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#3aa0ff]"
-        >
-          <option value="daily">Daily</option>
-          <option value="weekly">Weekly</option>
-          <option value="buy">Buy</option>
-        </select>
-        <button
-          onClick={addTask}
-          className="neon-button flex items-center gap-2 hover:scale-105 transition-transform duration-200"
-        >
-          <PlusCircle size={18} /> Add
-        </button>
-      </div>
-
-      <motion.div
-        key={activeSection.id}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="max-w-2xl mx-auto"
-      >
-        <h3
-          className="font-orbitron text-xl mb-4 text-center"
-          style={{
-            color: activeSection.color,
-            textShadow: `0 0 10px ${activeSection.color}66`,
-          }}
-        >
-          {activeSection.label}
-        </h3>
+        <div className="absolute top-6 right-6">
+          <div className="relative">
+            <button
+              onClick={() => setShowCloudPanel((v) => !v)}
+              className={`p-3 rounded-full cloud-glow ${uploading ? "syncing" : !synced ? "error" : ""}`}
+              title="Cloud Options"
+            >
+              <Cloud size={24} className="text-white" />
+            </button>
 
         <AnimatePresence>
-          {activeSection.list.map((task) => (
+          {showCloudPanel && (
             <motion.div
-              key={task.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className="glass-card p-4 flex justify-between items-center mb-2"
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 40 }}
+              transition={{ duration: 0.25 }}
+              className="absolute right-0 mt-3 w-64 bg-[#1a1d22ee] border border-gray-700 rounded-xl shadow-lg backdrop-blur-md p-3 z-50"
             >
-              <div>
-                <span
-                  onClick={() => !task.deleted && toggleTask(task.id)}
-                  className={`cursor-pointer select-none transition-all duration-200 block ${
-                    task.deleted ? "line-through opacity-40" : ""
-                  }`}
-                  style={{
-                    color: task.done ? "#aaaaaa" : "#ffffff",
-                    textShadow: task.done
-                      ? "none"
-                      : "0 0 6px rgba(255,255,255,0.4)",
-                    fontWeight: 500,
-                  }}
-                >
-                  {task.text}
-                </span>
-                <p className="text-xs text-gray-400 mt-1">
-                  Added by:{" "}
-                  <span className="text-[#3aa0ff]">{task.addedBy}</span>{" "}
-                  {task.lastUpdatedBy && (
-                    <>
-                      • Updated by:{" "}
-                      <span className="text-[#9b59b6]">
-                        {task.lastUpdatedBy}
-                      </span>
-                    </>
-                  )}
-                </p>
-              </div>
-
-              <div className="flex gap-3">
-                {!task.deleted ? (
-                  <>
-                    <button
-                      onClick={() => toggleTask(task.id)}
-                      className="hover:scale-110 transition-transform"
-                    >
-                      <CheckCircle
-                        size={20}
-                        className={
-                          task.done ? "text-[#44ff9a]" : "text-gray-400"
-                        }
-                      />
-                    </button>
-                    <button
-                      onClick={() => deleteTask(task.id)}
-                      className="hover:scale-110 transition-transform"
-                    >
-                      <Trash2 size={20} className="text-[#ff6b6b]" />
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => {
-                      const restored = tasks.map((t) =>
-                        t.id === task.id
-                          ? { ...t, deleted: false, lastModified: Date.now() }
-                          : t
-                      );
-                      setTasks(restored);
-                    }}
-                    className="hover:scale-110 transition-transform"
-                    title="Restore deleted task"
-                  >
-                    <CheckCircle size={20} className="text-[#44ff9a]" />
-                  </button>
-                )}
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </motion.div>
-
-      {/* === Cloud Panel === */}
-      <div className="fixed bottom-6 right-6 z-50">
-        <motion.div
-          initial={false}
-          animate={{
-            width: showCloudPanel ? 300 : 56,
-            height: showCloudPanel ? "auto" : 56,
-          }}
-          transition={{ duration: 0.3 }}
-          className="bg-[#1a1d22cc] backdrop-blur-md border border-gray-700 rounded-2xl shadow-lg p-3 overflow-hidden"
-        >
-          {showCloudPanel ? (
-            <div className="flex flex-col gap-3">
-              <div className="flex justify-between items-center mb-1">
+              <div className="flex justify-between items-center mb-2">
                 <h4 className="font-orbitron text-sm text-gray-300 tracking-wider flex items-center gap-2">
-                  Cloud Backup{" "}
-                  <span title={synced ? "Synced" : "Out of Sync"}>
-                    <Wifi
-                      size={14}
-                      className={synced ? "text-[#44ff9a]" : "text-[#ff6b6b]"}
-                    />
-                  </span>
+                  Cloud Sync{" "}
+                  <Wifi
+                    size={14}
+                    className={synced ? "text-[#44ff9a]" : "text-[#ff6b6b]"}
+                  />
                 </h4>
                 <button
                   onClick={() => setShowCloudPanel(false)}
                   className="text-gray-400 hover:text-gray-200"
                 >
-                  <X size={16} />
+                  <X size={14} />
                 </button>
               </div>
 
               {lastSynced && (
-                <p className="text-xs text-gray-400 font-mono">
+                <p className="text-xs text-gray-400 font-mono mb-2">
                   Last synced:{" "}
-                  <motion.span
-                    key={lastSynced}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.5 }}
-                    className="text-[#44ff9a]"
-                  >
+                  <span className="text-[#44ff9a]">
                     {new Date(lastSynced).toLocaleTimeString()}
-                  </motion.span>
+                  </span>
                 </p>
               )}
 
+              <button
+                onClick={() => saveTasksToBlob(false)}
+                disabled={uploading}
+                className="neon-button flex items-center justify-center gap-2 w-full mb-2"
+              >
+                <CloudUpload size={16} />
+                {uploading ? "Uploading..." : "Save Backup"}
+              </button>
+
+              <input
+                type="text"
+                value={restoreURL}
+                onChange={(e) => setRestoreURL(e.target.value)}
+                placeholder="Paste backup URL..."
+                className="w-full p-2 rounded bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#44ff9a] mb-2"
+              />
+              <button
+                onClick={restoreTasksFromBlob}
+                disabled={restoring}
+                className="neon-button flex items-center justify-center gap-2 w-full bg-[#44ff9a22] mb-2"
+              >
+                <CloudDownload size={16} />
+                {restoring ? "Restoring..." : "Restore"}
+              </button>
+
+              <label className="flex items-center gap-2 text-gray-300 text-xs cursor-pointer mb-2">
+                <input
+                  type="checkbox"
+                  checked={showDeleted}
+                  onChange={(e) => setShowDeleted(e.target.checked)}
+                  className="accent-[#44ff9a] w-4 h-4"
+                />
+                Show deleted
+              </label>
+
+              <button
+                onClick={purgeDeleted}
+                className="neon-button flex items-center justify-center gap-2 w-full bg-[#ff6b6b22] hover:bg-[#ff6b6b33]"
+              >
+                <Broom size={16} /> Purge Deleted
+              </button>
+
               {syncHistory.length > 0 && (
-                <div className="mt-2 border-t border-gray-700 pt-2">
-                  <p className="text-xs text-gray-400 mb-1">Sync History:</p>
+                <div className="mt-3 border-t border-gray-700 pt-2">
+                  <p className="text-xs text-gray-400 mb-1">Recent Syncs:</p>
                   <div className="max-h-20 overflow-y-auto text-xs font-mono text-gray-300 space-y-1">
                     {syncHistory.map((entry, i) => (
                       <div key={i}>
@@ -508,70 +376,176 @@ export default function TaskTracker() {
                   </div>
                 </div>
               )}
-
-              <button
-                onClick={() => saveTasksToBlob(false)}
-                disabled={uploading}
-                className="neon-button flex items-center justify-center gap-2 w-full"
-              >
-                <CloudUpload size={16} />
-                {uploading ? "Uploading..." : "Save Backup"}
-              </button>
-
-              <input
-                type="text"
-                value={restoreURL}
-                onChange={(e) => setRestoreURL(e.target.value)}
-                placeholder="Paste backup URL..."
-                className="w-full p-2 rounded bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#44ff9a]"
-              />
-              <button
-                onClick={restoreTasksFromBlob}
-                disabled={restoring}
-                className="neon-button flex items-center justify-center gap-2 w-full bg-[#44ff9a22]"
-              >
-                <CloudDownload size={16} />
-                {restoring ? "Restoring..." : "Restore"}
-              </button>
-
-              <label className="flex items-center gap-2 text-gray-300 text-xs cursor-pointer mt-1">
-                <input
-                  type="checkbox"
-                  checked={showDeleted}
-                  onChange={(e) => setShowDeleted(e.target.checked)}
-                  className="accent-[#44ff9a] w-4 h-4"
-                />
-                Show deleted tasks
-              </label>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowCloudPanel(true)}
-              className={`flex items-center justify-center text-white cloud-glow ${
-                uploading ? "syncing" : !synced ? "error" : ""
-              }`}
-              title="Open Cloud Backup"
-            >
-              <Cloud size={26} />
-            </button>
+            </motion.div>
           )}
-        </motion.div>
+        </AnimatePresence>
       </div>
-
-      <AnimatePresence>
-        {showSyncToast && (
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 40 }}
-            transition={{ duration: 0.4 }}
-            className="fixed bottom-24 right-6 bg-[#1e1f26dd] border border-[#44ff9a55] px-4 py-2 rounded-lg shadow-lg text-white font-orbitron text-sm backdrop-blur-md"
-            style={{ textShadow: "0 0 8px #44ff9a" }}
-          >
-            ☁ Synced just now
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
-  );
+  </motion.div>
+
+  <div className="flex flex-wrap gap-3 justify-center mb-6">
+    <input
+      value={input}
+      onChange={(e) => setInput(e.target.value)}
+      placeholder={`Add ${type} item...`}
+      className="flex-1 p-3 rounded-lg bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3aa0ff] max-w-md"
+    />
+    <input
+      value={addedBy}
+      onChange={(e) => setAddedBy(e.target.value)}
+      placeholder="Added by..."
+      className="p-3 rounded-lg bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#9b59b6]"
+      style={{ width: "130px" }}
+    />
+    <select
+      value={type}
+      onChange={(e) => setType(e.target.value as any)}
+      className="p-3 rounded-lg bg-[#1e2229] text-white border border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#3aa0ff]"
+    >
+      <option value="daily">Daily</option>
+      <option value="weekly">Weekly</option>
+      <option value="buy">Buy</option>
+    </select>
+    <button
+      onClick={addTask}
+      className="neon-button flex items-center gap-2 hover:scale-105 transition-transform duration-200"
+    >
+      <PlusCircle size={18} /> Add
+    </button>
+  </div>
+
+  <div className="flex gap-3 justify-center mb-6">
+    {["daily", "weekly", "buy"].map((tab) => {
+      const section = sections.find((s) => s.id === tab)!;
+      return (
+        <button
+          key={tab}
+          onClick={() => setActiveTab(tab as any)}
+          className={`px-4 py-2 rounded-md font-orbitron uppercase tracking-wider transition-all duration-300 ${
+            activeTab === tab ? "bg-opacity-90" : "bg-opacity-20 hover:bg-opacity-30"
+          }`}
+          style={{
+            backgroundColor: activeTab === tab ? `${section.color}22` : "transparent",
+            border: `1px solid ${section.color}55`,
+            color: activeTab === tab ? section.color : "#fff",
+            boxShadow: activeTab === tab ? `0 0 8px ${section.color}55` : "none",
+          }}
+        >
+          {section.label.split(" ")[0]}
+        </button>
+      );
+    })}
+  </div>
+
+  <motion.div
+    key={activeSection.id}
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.3 }}
+    className="max-w-2xl mx-auto"
+  >
+    <h3
+      className="font-orbitron text-xl mb-4 text-center"
+      style={{
+        color: activeSection.color,
+        textShadow: `0 0 10px ${activeSection.color}66`,
+      }}
+    >
+      {activeSection.label}
+    </h3>
+
+    <AnimatePresence>
+      {activeSection.list.map((task) => (
+        <motion.div
+          key={task.id}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+          className="glass-card p-4 flex justify-between items-center mb-2"
+        >
+          <div>
+            <span
+              onClick={() => !task.deleted && toggleTask(task.id)}
+              className={`cursor-pointer select-none transition-all duration-200 block ${
+                task.deleted ? "line-through opacity-40" : ""
+              }`}
+              style={{
+                color: task.done ? "#aaaaaa" : "#ffffff",
+                textShadow: task.done ? "none" : "0 0 6px rgba(255,255,255,0.4)",
+                fontWeight: 500,
+              }}
+            >
+              {task.text}
+            </span>
+            <p className="text-xs text-gray-400 mt-1">
+              Added by:{" "}
+              <span className="text-[#3aa0ff]">{task.addedBy}</span>{" "}
+              {task.lastUpdatedBy && (
+                <>
+                  • Updated by:{" "}
+                  <span className="text-[#9b59b6]">{task.lastUpdatedBy}</span>
+                </>
+              )}
+            </p>
+          </div>
+
+          <div className="flex gap-3">
+            {!task.deleted ? (
+              <>
+                <button
+                  onClick={() => toggleTask(task.id)}
+                  className="hover:scale-110 transition-transform"
+                >
+                  <CheckCircle
+                    size={20}
+                    className={task.done ? "text-[#44ff9a]" : "text-gray-400"}
+                  />
+                </button>
+                <button
+                  onClick={() => deleteTask(task.id)}
+                  className="hover:scale-110 transition-transform"
+                >
+                  <Trash2 size={20} className="text-[#ff6b6b]" />
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  const restored = tasks.map((t) =>
+                    t.id === task.id
+                      ? { ...t, deleted: false, lastModified: Date.now() }
+                      : t
+                  );
+                  setTasks(restored);
+                }}
+                className="hover:scale-110 transition-transform"
+                title="Restore deleted task"
+              >
+                <CheckCircle size={20} className="text-[#44ff9a]" />
+              </button>
+            )}
+          </div>
+        </motion.div>
+      ))}
+    </AnimatePresence>
+  </motion.div>
+
+  <AnimatePresence>
+    {showSyncToast && (
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 40 }}
+        transition={{ duration: 0.4 }}
+        className="fixed bottom-24 right-6 bg-[#1e1f26dd] border border-[#44ff9a55] px-4 py-2 rounded-lg shadow-lg text-white font-orbitron text-sm backdrop-blur-md"
+        style={{ textShadow: "0 0 8px #44ff9a" }}
+      >
+        {toastMessage}
+      </motion.div>
+    )}
+  </AnimatePresence>
+</div>
+
+);
 }
