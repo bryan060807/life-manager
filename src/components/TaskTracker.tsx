@@ -267,35 +267,36 @@ export default function TaskTracker() {
           </p>
         )}
 
-        {/* Cloud Backup Controls */}
-        <div className="text-center mt-10 space-y-4">
-          <button
-            onClick={saveTasksToBlob}
-            disabled={uploading}
-            className="neon-button flex items-center justify-center gap-2 mx-auto"
-          >
-            <CloudUpload size={18} />
-            {uploading ? "Uploading..." : "Save Backup to Cloud"}
-          </button>
+        {/* 💾 Cloud Backup / Restore Controls */}
+<div className="mt-10 flex justify-end">
+  <div className="flex flex-col items-end gap-3 bg-[#1a1d22aa] backdrop-blur-md p-4 rounded-lg border border-gray-700 max-w-sm shadow-lg">
+    <button
+      onClick={saveTasksToBlob}
+      disabled={uploading}
+      className="neon-button flex items-center justify-center gap-2 w-full"
+    >
+      <CloudUpload size={18} />
+      {uploading ? "Uploading..." : "Save Backup to Cloud"}
+    </button>
 
-          <div className="flex flex-col items-center gap-2 mt-4">
-            <input
-              type="text"
-              value={restoreURL}
-              onChange={(e) => setRestoreURL(e.target.value)}
-              placeholder="Paste cloud backup URL here..."
-              className="w-full max-w-md p-3 rounded-lg bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#44ff9a]"
-            />
-            <button
-              onClick={restoreTasksFromBlob}
-              disabled={restoring}
-              className="neon-button flex items-center justify-center gap-2 mx-auto bg-[#44ff9a22]"
-            >
-              <CloudDownload size={18} />
-              {restoring ? "Restoring..." : "Restore from Cloud"}
-            </button>
-          </div>
-        </div>
+    <input
+      type="text"
+      value={restoreURL}
+      onChange={(e) => setRestoreURL(e.target.value)}
+      placeholder="Paste cloud backup URL..."
+      className="w-full p-3 rounded-lg bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#44ff9a]"
+    />
+
+    <button
+      onClick={restoreTasksFromBlob}
+      disabled={restoring}
+      className="neon-button flex items-center justify-center gap-2 w-full bg-[#44ff9a22]"
+    >
+      <CloudDownload size={18} />
+      {restoring ? "Restoring..." : "Restore from Cloud"}
+    </button>
+  </div>
+</div>
       </motion.div>
     </div>
   );
