@@ -9,7 +9,7 @@ import {
   CloudDownload,
   X,
   Wifi,
-  Broom,
+  Eraser,
   Sun,
   Moon,
 } from "lucide-react";
@@ -352,7 +352,7 @@ export default function TaskTracker() {
                 onClick={purgeDeleted}
                 className="neon-button flex items-center justify-center gap-2 w-full bg-[#ff6b6b22] hover:bg-[#ff6b6b33]"
               >
-                <Broom size={16} /> Purge Deleted
+                <Eraser size={16} /> Purge Deleted
               </button>
 
               {syncHistory.length > 0 && (
