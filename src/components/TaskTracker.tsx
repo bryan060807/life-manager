@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   PlusCircle,
@@ -8,6 +8,7 @@ import {
   CloudUpload,
   CloudDownload,
   X,
+  Wifi,
 } from "lucide-react";
 
 interface Task {
@@ -15,6 +16,8 @@ interface Task {
   text: string;
   done: boolean;
   type: "daily" | "weekly" | "buy";
+  addedBy: string;
+  lastUpdatedBy?: string;
 }
 
 export default function TaskTracker() {
@@ -23,26 +26,59 @@ export default function TaskTracker() {
     return saved ? JSON.parse(saved) : [];
   });
   const [input, setInput] = useState("");
+  const [addedBy, setAddedBy] = useState("");
   const [type, setType] = useState<"daily" | "weekly" | "buy">("daily");
   const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "buy">("daily");
   const [uploading, setUploading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [restoreURL, setRestoreURL] = useState("");
   const [showCloudPanel, setShowCloudPanel] = useState(false);
+  const [synced, setSynced] = useState(true);
 
+  const saveTimeout = useRef<NodeJS.Timeout | null>(null);
+  const syncInterval = useRef<NodeJS.Timeout | null>(null);
+  const blobURL = "/api/uploadBlob"; // Replace with your Vercel Blob endpoint if needed
+
+  // 🧠 Save to localStorage
   useEffect(() => {
     localStorage.setItem("tasks", JSON.stringify(tasks));
   }, [tasks]);
 
+  // 💾 Auto-save debounce
+  useEffect(() => {
+    if (tasks.length > 0) {
+      if (saveTimeout.current) clearTimeout(saveTimeout.current);
+      saveTimeout.current = setTimeout(() => autoSaveToBlob(), 2000);
+    }
+  }, [tasks]);
+
+  // ☁️ Auto-fetch updates from Blob every 5 seconds
+  useEffect(() => {
+    syncInterval.current = setInterval(fetchLatestFromBlob, 5000);
+    return () => {
+      if (syncInterval.current) clearInterval(syncInterval.current);
+    };
+  }, []);
+
   const addTask = () => {
-    if (!input.trim()) return;
-    const newTask: Task = { id: Date.now(), text: input, done: false, type };
+    if (!input.trim() || !addedBy.trim()) return;
+    const newTask: Task = {
+      id: Date.now(),
+      text: input,
+      done: false,
+      type,
+      addedBy,
+    };
     setTasks([...tasks, newTask]);
     setInput("");
   };
 
-  const toggleTask = (id: number) =>
-    setTasks(tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  const toggleTask = (id: number) => {
+    const updatedTasks = tasks.map((t) =>
+      t.id === id ? { ...t, done: !t.done, lastUpdatedBy: addedBy || "Unknown" } : t
+    );
+    setTasks(updatedTasks);
+  };
 
   const deleteTask = (id: number) => setTasks(tasks.filter((t) => t.id !== id));
 
@@ -58,18 +94,18 @@ export default function TaskTracker() {
 
   const activeSection = sections.find((s) => s.id === activeTab)!;
 
-  // 💾 Upload tasks to Vercel Blob Storage
-  const saveTasksToBlob = async () => {
+  // 💾 Manual save to Vercel Blob
+  const saveTasksToBlob = async (silent = false) => {
     if (tasks.length === 0) {
-      alert("❌ No tasks to backup.");
+      if (!silent) alert("❌ No tasks to backup.");
       return;
     }
 
     setUploading(true);
     try {
-      const filename = `tasks-${Date.now()}.json`;
+      const filename = `tasks-latest.json`;
 
-      const res = await fetch("/api/uploadBlob", {
+      const res = await fetch(blobURL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -79,21 +115,47 @@ export default function TaskTracker() {
       });
 
       const data = await res.json();
-
-      if (data.url) {
+      if (!silent && data.url) {
         alert(`✅ Tasks backed up successfully!\n${data.url}`);
-      } else {
-        alert("❌ Failed to save tasks to cloud.");
       }
+      setSynced(true);
     } catch (error) {
-      console.error(error);
-      alert("❌ Upload failed. Check console for details.");
+      console.error("Upload failed:", error);
+      if (!silent) alert("❌ Upload failed. Check console for details.");
+      setSynced(false);
     } finally {
       setUploading(false);
     }
   };
 
-  // ☁️ Restore tasks from a Blob backup URL
+  // 🔁 Auto-save handler
+  const autoSaveToBlob = async () => {
+    await saveTasksToBlob(true);
+    console.log("☁️ Auto-synced tasks to cloud.");
+  };
+
+  // ☁️ Fetch latest cloud data
+  const fetchLatestFromBlob = async () => {
+    try {
+      const res = await fetch("/api/tasks-latest.json"); // If Blob is public, use its URL directly
+      if (!res.ok) return;
+      const cloudData: Task[] = await res.json();
+
+      // Compare and update only if newer
+      const localHash = JSON.stringify(tasks);
+      const remoteHash = JSON.stringify(cloudData);
+      if (localHash !== remoteHash) {
+        setTasks(cloudData);
+        setSynced(true);
+        console.log("🛰 Cloud sync updated local tasks");
+      }
+    } catch (err) {
+      console.error("Cloud fetch failed:", err);
+      setSynced(false);
+    }
+  };
+
+  // ☁️ Manual restore
   const restoreTasksFromBlob = async () => {
     if (!restoreURL.trim()) {
       alert("❌ Please enter a valid backup URL first.");
@@ -104,7 +166,6 @@ export default function TaskTracker() {
     try {
       const res = await fetch(restoreURL);
       if (!res.ok) throw new Error("Failed to fetch backup file.");
-
       const data: Task[] = await res.json();
 
       if (Array.isArray(data)) {
@@ -142,7 +203,7 @@ export default function TaskTracker() {
           AIBBRY’s Task Tracker
         </h1>
         <p className="text-gray-300 italic text-base tracking-wide">
-          Designed to help you get your shit together. Finally…
+          Shared task list synced through the cloud 🧠☁️
         </p>
       </motion.div>
 
@@ -183,6 +244,13 @@ export default function TaskTracker() {
           onChange={(e) => setInput(e.target.value)}
           placeholder={`Add ${type} item...`}
           className="flex-1 p-3 rounded-lg bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#3aa0ff] max-w-md"
+        />
+        <input
+          value={addedBy}
+          onChange={(e) => setAddedBy(e.target.value)}
+          placeholder="Added by..."
+          className="p-3 rounded-lg bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#9b59b6]"
+          style={{ width: "130px" }}
         />
         <select
           value={type}
@@ -229,19 +297,30 @@ export default function TaskTracker() {
               transition={{ duration: 0.2 }}
               className="glass-card p-4 flex justify-between items-center mb-2"
             >
-              <span
-                onClick={() => toggleTask(task.id)}
-                className="cursor-pointer select-none transition-all duration-200"
-                style={{
-                  color: task.done ? "#aaaaaa" : "#ffffff",
-                  textShadow: task.done
-                    ? "none"
-                    : "0 0 6px rgba(255,255,255,0.4)",
-                  fontWeight: 500,
-                }}
-              >
-                {task.text}
-              </span>
+              <div>
+                <span
+                  onClick={() => toggleTask(task.id)}
+                  className="cursor-pointer select-none transition-all duration-200 block"
+                  style={{
+                    color: task.done ? "#aaaaaa" : "#ffffff",
+                    textShadow: task.done
+                      ? "none"
+                      : "0 0 6px rgba(255,255,255,0.4)",
+                    fontWeight: 500,
+                  }}
+                >
+                  {task.text}
+                </span>
+                <p className="text-xs text-gray-400 mt-1">
+                  Added by: <span className="text-[#3aa0ff]">{task.addedBy}</span>{" "}
+                  {task.lastUpdatedBy && (
+                    <>
+                      • Updated by:{" "}
+                      <span className="text-[#9b59b6]">{task.lastUpdatedBy}</span>
+                    </>
+                  )}
+                </p>
+              </div>
 
               <div className="flex gap-3">
                 <button
@@ -281,8 +360,13 @@ export default function TaskTracker() {
           {showCloudPanel ? (
             <div className="flex flex-col gap-3">
               <div className="flex justify-between items-center mb-1">
-                <h4 className="font-orbitron text-sm text-gray-300 tracking-wider">
-                  Cloud Backup
+                <h4 className="font-orbitron text-sm text-gray-300 tracking-wider flex items-center gap-2">
+                  Cloud Backup{" "}
+                  <Wifi
+                    size={14}
+                    className={synced ? "text-[#44ff9a]" : "text-[#ff6b6b]"}
+                    title={synced ? "Synced" : "Out of Sync"}
+                  />
                 </h4>
                 <button
                   onClick={() => setShowCloudPanel(false)}
@@ -293,7 +377,7 @@ export default function TaskTracker() {
               </div>
 
               <button
-                onClick={saveTasksToBlob}
+                onClick={() => saveTasksToBlob(false)}
                 disabled={uploading}
                 className="neon-button flex items-center justify-center gap-2 w-full"
               >
