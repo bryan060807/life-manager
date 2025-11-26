@@ -18,6 +18,7 @@ interface Task {
   type: "daily" | "weekly" | "buy";
   addedBy: string;
   lastUpdatedBy?: string;
+  lastModified: number;
 }
 
 export default function TaskTracker() {
@@ -25,6 +26,7 @@ export default function TaskTracker() {
     const saved = localStorage.getItem("tasks");
     return saved ? JSON.parse(saved) : [];
   });
+
   const [input, setInput] = useState("");
   const [addedBy, setAddedBy] = useState("");
   const [type, setType] = useState<"daily" | "weekly" | "buy">("daily");
@@ -64,7 +66,7 @@ export default function TaskTracker() {
   useEffect(() => {
     const scheduleSync = () => {
       const now = Date.now();
-      const idle = now - lastInteraction.current > 20000; // 20s idle threshold
+      const idle = now - lastInteraction.current > 20000;
       const interval = idle ? 20000 : 5000;
       if (syncInterval.current) clearInterval(syncInterval.current);
       syncInterval.current = setInterval(fetchLatestFromBlob, interval);
@@ -89,6 +91,8 @@ export default function TaskTracker() {
       done: false,
       type,
       addedBy,
+      lastUpdatedBy: addedBy,
+      lastModified: Date.now(),
     };
     setTasks([...tasks, newTask]);
     setInput("");
@@ -96,7 +100,14 @@ export default function TaskTracker() {
 
   const toggleTask = (id: number) => {
     const updatedTasks = tasks.map((t) =>
-      t.id === id ? { ...t, done: !t.done, lastUpdatedBy: addedBy || "Unknown" } : t
+      t.id === id
+        ? {
+            ...t,
+            done: !t.done,
+            lastUpdatedBy: addedBy || "Unknown",
+            lastModified: Date.now(),
+          }
+        : t
     );
     setTasks(updatedTasks);
   };
@@ -140,7 +151,7 @@ export default function TaskTracker() {
         setBlobPublicFile(data.url);
         setSynced(true);
         if (!silent) alert(`✅ Tasks backed up successfully!\n${data.url}`);
-      } else if (!silent) alert("❌ No URL returned from upload.");
+      }
     } catch (e) {
       console.error(e);
       setSynced(false);
@@ -156,16 +167,32 @@ export default function TaskTracker() {
 
   const fetchLatestFromBlob = async () => {
     try {
-      const res = await fetch(blobPublicFile);
+      const res = await fetch(blobPublicFile + "?_=" + Date.now());
       if (!res.ok) return;
+
       const cloudData: Task[] = await res.json();
-      const localData = JSON.stringify(tasks);
-      const remoteData = JSON.stringify(cloudData);
-      if (localData !== remoteData) {
-        setTasks(cloudData);
+      let merged = [...tasks];
+
+      for (const remoteTask of cloudData) {
+        const localMatch = merged.find((t) => t.id === remoteTask.id);
+        if (!localMatch) {
+          merged.push(remoteTask);
+        } else if (
+          remoteTask.lastModified &&
+          remoteTask.lastModified > (localMatch.lastModified || 0)
+        ) {
+          merged = merged.map((t) =>
+            t.id === remoteTask.id ? remoteTask : t
+          );
+        }
+      }
+
+      const mergedString = JSON.stringify(merged);
+      if (mergedString !== JSON.stringify(tasks)) {
+        setTasks(merged);
         setSynced(true);
         triggerSyncToast();
-        console.log("🛰 Cloud sync updated local tasks");
+        console.log("🔄 Merged cloud + local tasks successfully");
       }
     } catch (err) {
       console.error("Cloud fetch failed:", err);
