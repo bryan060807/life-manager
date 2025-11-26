@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PlusCircle, Trash2, CheckCircle } from "lucide-react";
+import { PlusCircle, Trash2, CheckCircle, CloudUpload } from "lucide-react";
 
 interface Task {
   id: number;
@@ -17,6 +17,7 @@ export default function TaskTracker() {
   const [input, setInput] = useState("");
   const [type, setType] = useState<"daily" | "weekly" | "buy">("daily");
   const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "buy">("daily");
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("tasks", JSON.stringify(tasks));
@@ -47,21 +48,57 @@ export default function TaskTracker() {
 
   const activeSection = sections.find((s) => s.id === activeTab)!;
 
+  // 🧠 Upload tasks to Vercel Blob Storage
+  const saveTasksToBlob = async () => {
+    if (tasks.length === 0) {
+      alert("❌ No tasks to backup.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const filename = `tasks-${Date.now()}.json`;
+
+      const res = await fetch("/api/uploadBlob", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename,
+          content: JSON.stringify(tasks, null, 2),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.url) {
+        alert(`✅ Tasks backed up successfully!\n${data.url}`);
+      } else {
+        alert("❌ Failed to save tasks to cloud.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("❌ Upload failed. Check console for details.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
-      {/* ===== Header Title ===== */}
+      {/* Header Title */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8 }}
         className="text-center mb-6"
       >
-        <h1 className="font-orbitron text-3xl md:text-4xl text-white mb-2 tracking-wide"
+        <h1
+          className="font-orbitron text-3xl md:text-4xl text-white mb-2 tracking-wide"
           style={{
             textShadow: "0 0 12px rgba(58, 160, 255, 0.6)",
             background: "linear-gradient(to right, #3aa0ff, #9b59b6)",
             WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent"
+            WebkitTextFillColor: "transparent",
           }}
         >
           AIBBRY’s Task Tracker
@@ -71,7 +108,7 @@ export default function TaskTracker() {
         </p>
       </motion.div>
 
-      {/* ===== Tab Buttons ===== */}
+      {/* Tab Buttons */}
       <div className="flex gap-3 justify-center mb-6">
         {sections.map((tab) => (
           <button
@@ -101,7 +138,7 @@ export default function TaskTracker() {
         ))}
       </div>
 
-      {/* ===== Input Area ===== */}
+      {/* Input Area */}
       <div className="flex flex-wrap gap-3 justify-center mb-6">
         <input
           value={input}
@@ -128,7 +165,7 @@ export default function TaskTracker() {
         </button>
       </div>
 
-      {/* ===== Active Section ===== */}
+      {/* Active Section */}
       <motion.div
         key={activeSection.id}
         initial={{ opacity: 0, y: 10 }}
@@ -157,7 +194,6 @@ export default function TaskTracker() {
               transition={{ duration: 0.2 }}
               className="glass-card p-4 flex justify-between items-center mb-2"
             >
-              {/* Task Text */}
               <span
                 onClick={() => toggleTask(task.id)}
                 className="cursor-pointer select-none transition-all duration-200"
@@ -172,7 +208,6 @@ export default function TaskTracker() {
                 {task.text}
               </span>
 
-              {/* Action Buttons */}
               <div className="flex gap-3">
                 <button
                   onClick={() => toggleTask(task.id)}
@@ -201,6 +236,18 @@ export default function TaskTracker() {
             No items yet — add one above.
           </p>
         )}
+
+        {/* 💾 Save Backup to Cloud Button */}
+        <div className="text-center mt-8">
+          <button
+            onClick={saveTasksToBlob}
+            disabled={uploading}
+            className="neon-button flex items-center justify-center gap-2 mx-auto"
+          >
+            <CloudUpload size={18} />
+            {uploading ? "Uploading..." : "Save Backup to Cloud"}
+          </button>
+        </div>
       </motion.div>
     </div>
   );
