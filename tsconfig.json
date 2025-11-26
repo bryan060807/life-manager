@@ -13,7 +13,7 @@
 
     /* === Module Resolution === */
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
@@ -21,16 +21,15 @@
     /* === React === */
     "jsx": "react-jsx",
 
-    /* === Path Aliases (optional, can simplify imports) === */
+    /* === NodeJS + Vite === */
+    "types": ["node", "vite/client"],
+
+    /* === Path Aliases (optional) === */
     "baseUrl": "./src",
     "paths": {
       "@/*": ["*"]
-    },
-
-    /* === NodeJS + Type Support === */
-    "types": ["node", "vite/client"]
+    }
   },
-
   "include": ["src", "vite.config.ts"],
   "exclude": ["node_modules", "dist"]
 }
