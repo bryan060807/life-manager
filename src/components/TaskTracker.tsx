@@ -131,6 +131,29 @@ export default function TaskTracker() {
     setTasks(updatedTasks);
   };
 
+  /* === Restore backup === */
+  const restoreTasksFromBlob = async () => {
+    if (!restoreURL.trim()) {
+      alert("❌ Please enter a valid backup URL first.");
+      return;
+    }
+    setRestoring(true);
+    try {
+      const res = await fetch(restoreURL);
+      if (!res.ok) throw new Error("Failed to fetch backup file.");
+      const data: Task[] = await res.json();
+      if (Array.isArray(data)) {
+        setTasks(data);
+        alert("✅ Tasks restored successfully!");
+      } else alert("❌ Backup file format invalid.");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Restore failed.");
+    } finally {
+      setRestoring(false);
+    }
+  };
+
   const dailyTasks = tasks.filter(
     (t) => t.type === "daily" && (showDeleted || !t.deleted)
   );
@@ -232,7 +255,6 @@ export default function TaskTracker() {
   /* === UI === */
   return (
     <div className="space-y-8">
-      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -497,7 +519,7 @@ export default function TaskTracker() {
                 className="w-full p-2 rounded bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#44ff9a]"
               />
               <button
-                onClick={() => restoreTasksFromBlob()}
+                onClick={restoreTasksFromBlob}
                 disabled={restoring}
                 className="neon-button flex items-center justify-center gap-2 w-full bg-[#44ff9a22]"
               >
