@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PlusCircle, Trash2, CheckCircle, CloudUpload } from "lucide-react";
+import { PlusCircle, Trash2, CheckCircle, CloudUpload, CloudDownload } from "lucide-react";
 
 interface Task {
   id: number;
@@ -18,6 +18,8 @@ export default function TaskTracker() {
   const [type, setType] = useState<"daily" | "weekly" | "buy">("daily");
   const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "buy">("daily");
   const [uploading, setUploading] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreURL, setRestoreURL] = useState("");
 
   useEffect(() => {
     localStorage.setItem("tasks", JSON.stringify(tasks));
@@ -48,7 +50,7 @@ export default function TaskTracker() {
 
   const activeSection = sections.find((s) => s.id === activeTab)!;
 
-  // 🧠 Upload tasks to Vercel Blob Storage
+  // 💾 Upload tasks to Vercel Blob Storage
   const saveTasksToBlob = async () => {
     if (tasks.length === 0) {
       alert("❌ No tasks to backup.");
@@ -83,6 +85,34 @@ export default function TaskTracker() {
     }
   };
 
+  // ☁️ Restore tasks from a Blob backup URL
+  const restoreTasksFromBlob = async () => {
+    if (!restoreURL.trim()) {
+      alert("❌ Please enter a valid backup URL first.");
+      return;
+    }
+
+    setRestoring(true);
+    try {
+      const res = await fetch(restoreURL);
+      if (!res.ok) throw new Error("Failed to fetch backup file.");
+
+      const data: Task[] = await res.json();
+
+      if (Array.isArray(data)) {
+        setTasks(data);
+        alert("✅ Tasks restored successfully!");
+      } else {
+        alert("❌ Backup file format invalid.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("❌ Restore failed. Check console for details.");
+    } finally {
+      setRestoring(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Header Title */}
@@ -108,7 +138,7 @@ export default function TaskTracker() {
         </p>
       </motion.div>
 
-      {/* Tab Buttons */}
+      {/* Tabs */}
       <div className="flex gap-3 justify-center mb-6">
         {sections.map((tab) => (
           <button
@@ -237,8 +267,8 @@ export default function TaskTracker() {
           </p>
         )}
 
-        {/* 💾 Save Backup to Cloud Button */}
-        <div className="text-center mt-8">
+        {/* Cloud Backup Controls */}
+        <div className="text-center mt-10 space-y-4">
           <button
             onClick={saveTasksToBlob}
             disabled={uploading}
@@ -247,6 +277,24 @@ export default function TaskTracker() {
             <CloudUpload size={18} />
             {uploading ? "Uploading..." : "Save Backup to Cloud"}
           </button>
+
+          <div className="flex flex-col items-center gap-2 mt-4">
+            <input
+              type="text"
+              value={restoreURL}
+              onChange={(e) => setRestoreURL(e.target.value)}
+              placeholder="Paste cloud backup URL here..."
+              className="w-full max-w-md p-3 rounded-lg bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#44ff9a]"
+            />
+            <button
+              onClick={restoreTasksFromBlob}
+              disabled={restoring}
+              className="neon-button flex items-center justify-center gap-2 mx-auto bg-[#44ff9a22]"
+            >
+              <CloudDownload size={18} />
+              {restoring ? "Restoring..." : "Restore from Cloud"}
+            </button>
+          </div>
         </div>
       </motion.div>
     </div>
