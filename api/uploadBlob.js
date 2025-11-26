@@ -2,25 +2,20 @@
 import { put } from "@vercel/blob";
 
 export const config = {
-  runtime: "edge",
+  runtime: "nodejs", // ✅ switch from "edge" to "nodejs"
 };
 
-export default async function handler(req) {
+export default async function handler(req, res) {
   try {
-    const { filename, content } = await req.json();
+    const { filename, content } = req.body;
 
     const { url } = await put(`tasks/${filename}`, content, {
       access: "public",
     });
 
-    return new Response(JSON.stringify({ url }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return res.status(200).json({ url });
+  } catch (err) {
+    console.error("Blob upload failed:", err);
+    return res.status(500).json({ error: err.message });
   }
 }
