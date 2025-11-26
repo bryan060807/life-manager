@@ -131,7 +131,6 @@ export default function TaskTracker() {
     setTasks(updatedTasks);
   };
 
-  /* === Restore backup === */
   const restoreTasksFromBlob = async () => {
     if (!restoreURL.trim()) {
       alert("❌ Please enter a valid backup URL first.");
@@ -171,7 +170,7 @@ export default function TaskTracker() {
   ];
   const activeSection = sections.find((s) => s.id === activeTab)!;
 
-  /* === Cloud functions === */
+  /* === Cloud Sync === */
   const saveTasksToBlob = async (silent = false) => {
     if (tasks.length === 0) {
       if (!silent) alert("❌ No tasks to backup.");
@@ -195,7 +194,6 @@ export default function TaskTracker() {
           { time: now, status: "success" },
           ...prev.slice(0, 4),
         ]);
-
         localStorage.setItem("blobPublicFile", data.url);
         setBlobPublicFile(data.url);
         setSynced(true);
@@ -215,6 +213,7 @@ export default function TaskTracker() {
 
   const autoSaveToBlob = async () => await saveTasksToBlob(true);
 
+  /* === Merge + Deletion Lock === */
   const fetchLatestFromBlob = async () => {
     try {
       const res = await fetch(blobPublicFile + "?_=" + Date.now());
@@ -225,22 +224,33 @@ export default function TaskTracker() {
 
       [...tasks, ...cloudData].forEach((t) => {
         const existing = mergedMap.get(t.id);
-        if (!existing || t.lastModified > existing.lastModified) mergedMap.set(t.id, t);
+        if (!existing) {
+          mergedMap.set(t.id, t);
+        } else {
+          const newer = t.lastModified > existing.lastModified ? t : existing;
+          if (t.deleted || existing.deleted) {
+            mergedMap.set(t.id, { ...newer, deleted: true });
+          } else {
+            mergedMap.set(t.id, newer);
+          }
+        }
       });
 
       const merged = Array.from(mergedMap.values());
-      const visible = merged.filter((t) => !t.deleted);
-      if (JSON.stringify(visible) !== JSON.stringify(tasks)) {
-        setTasks(visible);
-        setSynced(true);
-        triggerSyncToast();
-        const now = Date.now();
-        setLastSynced(now);
-        setSyncHistory((prev) => [
-          { time: now, status: "success" },
-          ...prev.slice(0, 4),
-        ]);
-      }
+      setTasks(merged);
+
+      await saveTasksToBlob(true);
+
+      setSynced(true);
+      triggerSyncToast();
+      const now = Date.now();
+      setLastSynced(now);
+      setSyncHistory((prev) => [
+        { time: now, status: "success" },
+        ...prev.slice(0, 4),
+      ]);
+
+      console.log("🔄 Merged + synced deletions successfully.");
     } catch (err) {
       console.error("Cloud fetch failed:", err);
       setSynced(false);
@@ -277,7 +287,6 @@ export default function TaskTracker() {
         </p>
       </motion.div>
 
-      {/* Tabs */}
       <div className="flex gap-3 justify-center mb-6">
         {sections.map((tab) => (
           <button
@@ -301,7 +310,6 @@ export default function TaskTracker() {
         ))}
       </div>
 
-      {/* Input Bar */}
       <div className="flex flex-wrap gap-3 justify-center mb-6">
         <input
           value={input}
@@ -333,7 +341,6 @@ export default function TaskTracker() {
         </button>
       </div>
 
-      {/* Task List */}
       <motion.div
         key={activeSection.id}
         initial={{ opacity: 0, y: 10 }}
@@ -434,7 +441,7 @@ export default function TaskTracker() {
         </AnimatePresence>
       </motion.div>
 
-      {/* Cloud Panel */}
+      {/* === Cloud Panel === */}
       <div className="fixed bottom-6 right-6 z-50">
         <motion.div
           initial={false}
@@ -540,7 +547,9 @@ export default function TaskTracker() {
           ) : (
             <button
               onClick={() => setShowCloudPanel(true)}
-              className="flex items-center justify-center text-white cloud-glow"
+              className={`flex items-center justify-center text-white cloud-glow ${
+                uploading ? "syncing" : !synced ? "error" : ""
+              }`}
               title="Open Cloud Backup"
             >
               <Cloud size={26} />
