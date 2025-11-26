@@ -34,20 +34,25 @@ export default function TaskTracker() {
   const [restoreURL, setRestoreURL] = useState("");
   const [showCloudPanel, setShowCloudPanel] = useState(false);
   const [synced, setSynced] = useState(true);
+  const [showSyncToast, setShowSyncToast] = useState(false);
 
-  // ✅ Fix TypeScript NodeJS error using browser-safe types
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastInteraction = useRef<number>(Date.now());
 
-  const blobUploadAPI = "/api/uploadBlob"; // your API route
-  const blobPublicFile = "/api/tasks-latest.json"; // optional public blob link
+  const blobUploadAPI = "/api/uploadBlob";
+  const [blobPublicFile, setBlobPublicFile] = useState<string>(
+    () =>
+      localStorage.getItem("blobPublicFile") ||
+      "https://ncb7nshm67uygsmd.public.blob.vercel-storage.com/tasks-latest.json"
+  );
 
-  /* 🧠 Local Persistence */
+  /* === Local storage persistence === */
   useEffect(() => {
     localStorage.setItem("tasks", JSON.stringify(tasks));
   }, [tasks]);
 
-  /* 💾 Debounced Auto-Save to Blob */
+  /* === Autosave debounce === */
   useEffect(() => {
     if (tasks.length > 0) {
       if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -55,14 +60,27 @@ export default function TaskTracker() {
     }
   }, [tasks]);
 
-  /* ☁️ Periodic Auto-Fetch from Cloud (5s) */
+  /* === Adaptive sync loop === */
   useEffect(() => {
-    syncInterval.current = setInterval(fetchLatestFromBlob, 5000);
+    const scheduleSync = () => {
+      const now = Date.now();
+      const idle = now - lastInteraction.current > 20000; // 20s idle threshold
+      const interval = idle ? 20000 : 5000;
+      if (syncInterval.current) clearInterval(syncInterval.current);
+      syncInterval.current = setInterval(fetchLatestFromBlob, interval);
+    };
+    scheduleSync();
+    document.addEventListener("click", () => {
+      lastInteraction.current = Date.now();
+      scheduleSync();
+    });
     return () => {
       if (syncInterval.current) clearInterval(syncInterval.current);
+      document.removeEventListener("click", () => ({}));
     };
-  }, []);
+  }, [blobPublicFile]);
 
+  /* === Core functions === */
   const addTask = () => {
     if (!input.trim() || !addedBy.trim()) return;
     const newTask: Task = {
@@ -97,18 +115,14 @@ export default function TaskTracker() {
     { label: "Weekly Goals", id: "weekly", color: "#9b59b6", list: weeklyTasks },
     { label: "Things to Buy", id: "buy", color: "#44ff9a", list: buyTasks },
   ];
-
   const activeSection = sections.find((s) => s.id === activeTab)!;
 
-  /* === Cloud Functions === */
-
-  // 💾 Save to Vercel Blob
+  /* === Cloud functions === */
   const saveTasksToBlob = async (silent = false) => {
     if (tasks.length === 0) {
       if (!silent) alert("❌ No tasks to backup.");
       return;
     }
-
     setUploading(true);
     try {
       const res = await fetch(blobUploadAPI, {
@@ -119,40 +133,38 @@ export default function TaskTracker() {
           content: JSON.stringify(tasks, null, 2),
         }),
       });
-
       const data = await res.json();
-      if (!silent && data.url) {
-        alert(`✅ Tasks backed up successfully!\n${data.url}`);
-      }
-      setSynced(true);
-    } catch (error) {
-      console.error("Blob upload failed:", error);
-      if (!silent) alert("❌ Upload failed. Check console for details.");
+      if (data.url) {
+        console.log("✅ Synced to:", data.url);
+        localStorage.setItem("blobPublicFile", data.url);
+        setBlobPublicFile(data.url);
+        setSynced(true);
+        if (!silent) alert(`✅ Tasks backed up successfully!\n${data.url}`);
+      } else if (!silent) alert("❌ No URL returned from upload.");
+    } catch (e) {
+      console.error(e);
       setSynced(false);
     } finally {
       setUploading(false);
     }
   };
 
-  // 🔁 Debounced Auto-Save
   const autoSaveToBlob = async () => {
     await saveTasksToBlob(true);
     console.log("☁️ Auto-synced tasks to cloud.");
   };
 
-  // ☁️ Auto-Fetch from Blob
   const fetchLatestFromBlob = async () => {
     try {
       const res = await fetch(blobPublicFile);
       if (!res.ok) return;
-
       const cloudData: Task[] = await res.json();
       const localData = JSON.stringify(tasks);
       const remoteData = JSON.stringify(cloudData);
-
       if (localData !== remoteData) {
         setTasks(cloudData);
         setSynced(true);
+        triggerSyncToast();
         console.log("🛰 Cloud sync updated local tasks");
       }
     } catch (err) {
@@ -161,38 +173,36 @@ export default function TaskTracker() {
     }
   };
 
-  // ☁️ Restore Manually from URL
   const restoreTasksFromBlob = async () => {
     if (!restoreURL.trim()) {
       alert("❌ Please enter a valid backup URL first.");
       return;
     }
-
     setRestoring(true);
     try {
       const res = await fetch(restoreURL);
       if (!res.ok) throw new Error("Failed to fetch backup file.");
-
       const data: Task[] = await res.json();
       if (Array.isArray(data)) {
         setTasks(data);
         alert("✅ Tasks restored successfully!");
-      } else {
-        alert("❌ Backup file format invalid.");
-      }
-    } catch (error) {
-      console.error(error);
-      alert("❌ Restore failed. Check console for details.");
+      } else alert("❌ Backup file format invalid.");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Restore failed.");
     } finally {
       setRestoring(false);
     }
   };
 
-  /* === UI === */
+  const triggerSyncToast = () => {
+    setShowSyncToast(true);
+    setTimeout(() => setShowSyncToast(false), 2500);
+  };
 
+  /* === UI === */
   return (
     <div className="space-y-8">
-      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -211,11 +221,10 @@ export default function TaskTracker() {
           AIBBRY’s Task Tracker
         </h1>
         <p className="text-gray-300 italic text-base tracking-wide">
-          Collaborative productivity — synced in real-time ☁️🧠
+          Synced across your devices in real-time ☁️💫
         </p>
       </motion.div>
 
-      {/* Tabs */}
       <div className="flex gap-3 justify-center mb-6">
         {sections.map((tab) => (
           <button
@@ -235,9 +244,7 @@ export default function TaskTracker() {
                   : "1px solid rgba(255,255,255,0.1)",
               color: activeTab === tab.id ? tab.color : "#ffffff",
               boxShadow:
-                activeTab === tab.id
-                  ? `0 0 8px ${tab.color}55`
-                  : "none",
+                activeTab === tab.id ? `0 0 8px ${tab.color}55` : "none",
             }}
           >
             {tab.label.split(" ")[0]}
@@ -245,7 +252,6 @@ export default function TaskTracker() {
         ))}
       </div>
 
-      {/* Input Area */}
       <div className="flex flex-wrap gap-3 justify-center mb-6">
         <input
           value={input}
@@ -277,7 +283,6 @@ export default function TaskTracker() {
         </button>
       </div>
 
-      {/* Task Section */}
       <motion.div
         key={activeSection.id}
         initial={{ opacity: 0, y: 10 }}
@@ -329,7 +334,6 @@ export default function TaskTracker() {
                   )}
                 </p>
               </div>
-
               <div className="flex gap-3">
                 <button
                   onClick={() => toggleTask(task.id)}
@@ -337,9 +341,7 @@ export default function TaskTracker() {
                 >
                   <CheckCircle
                     size={20}
-                    className={
-                      task.done ? "text-[#44ff9a]" : "text-gray-400"
-                    }
+                    className={task.done ? "text-[#44ff9a]" : "text-gray-400"}
                   />
                 </button>
                 <button
@@ -354,7 +356,6 @@ export default function TaskTracker() {
         </AnimatePresence>
       </motion.div>
 
-      {/* 🌐 Floating Cloud Control Widget */}
       <div className="fixed bottom-6 right-6 z-50">
         <motion.div
           initial={false}
@@ -384,7 +385,6 @@ export default function TaskTracker() {
                   <X size={16} />
                 </button>
               </div>
-
               <button
                 onClick={() => saveTasksToBlob(false)}
                 disabled={uploading}
@@ -393,7 +393,6 @@ export default function TaskTracker() {
                 <CloudUpload size={16} />
                 {uploading ? "Uploading..." : "Save Backup"}
               </button>
-
               <input
                 type="text"
                 value={restoreURL}
@@ -401,7 +400,6 @@ export default function TaskTracker() {
                 placeholder="Paste backup URL..."
                 className="w-full p-2 rounded bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#44ff9a]"
               />
-
               <button
                 onClick={restoreTasksFromBlob}
                 disabled={restoring}
@@ -422,6 +420,21 @@ export default function TaskTracker() {
           )}
         </motion.div>
       </div>
+
+      <AnimatePresence>
+        {showSyncToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 40 }}
+            transition={{ duration: 0.4 }}
+            className="fixed bottom-24 right-6 bg-[#1e1f26dd] border border-[#44ff9a55] px-4 py-2 rounded-lg shadow-lg text-white font-orbitron text-sm backdrop-blur-md"
+            style={{ textShadow: "0 0 8px #44ff9a" }}
+          >
+            ☁ Synced just now
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
