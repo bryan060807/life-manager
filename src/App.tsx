@@ -3,6 +3,7 @@ import "./index.css";
 import { motion } from "framer-motion";
 import { Sun, Moon, CheckSquare } from "lucide-react";
 import TaskTracker from "./components/TaskTracker";
+import { Analytics } from "@vercel/analytics/react"; // ✅ Correct import for Vite + React
 
 export default function App() {
   const [theme, setTheme] = useState<"cyberdark" | "cyberlight">("cyberdark");
@@ -36,10 +37,14 @@ export default function App() {
         <TaskTracker />
       </motion.main>
 
+      {/* Footer */}
       <footer className="text-center text-xs text-gray-500 mt-8">
         <CheckSquare size={14} className="inline mr-1" />
         Stay productive, MotherFucker!
       </footer>
+
+      {/* ✅ Vercel Analytics (tracks usage automatically when deployed on Vercel) */}
+      <Analytics />
     </div>
   );
 }
