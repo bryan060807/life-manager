@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PlusCircle, Trash2, CheckCircle, CloudUpload, CloudDownload } from "lucide-react";
+import {
+  PlusCircle,
+  Trash2,
+  CheckCircle,
+  Cloud,
+  CloudUpload,
+  CloudDownload,
+  X,
+} from "lucide-react";
 
 interface Task {
   id: number;
@@ -20,6 +28,7 @@ export default function TaskTracker() {
   const [uploading, setUploading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [restoreURL, setRestoreURL] = useState("");
+  const [showCloudPanel, setShowCloudPanel] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("tasks", JSON.stringify(tasks));
@@ -35,8 +44,7 @@ export default function TaskTracker() {
   const toggleTask = (id: number) =>
     setTasks(tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
 
-  const deleteTask = (id: number) =>
-    setTasks(tasks.filter((t) => t.id !== id));
+  const deleteTask = (id: number) => setTasks(tasks.filter((t) => t.id !== id));
 
   const dailyTasks = tasks.filter((t) => t.type === "daily");
   const weeklyTasks = tasks.filter((t) => t.type === "weekly");
@@ -115,7 +123,7 @@ export default function TaskTracker() {
 
   return (
     <div className="space-y-8">
-      {/* Header Title */}
+      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -178,9 +186,7 @@ export default function TaskTracker() {
         />
         <select
           value={type}
-          onChange={(e) =>
-            setType(e.target.value as "daily" | "weekly" | "buy")
-          }
+          onChange={(e) => setType(e.target.value as "daily" | "weekly" | "buy")}
           className="p-3 rounded-lg bg-[#1e2229] text-white border border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#3aa0ff]"
         >
           <option value="daily">Daily</option>
@@ -195,12 +201,11 @@ export default function TaskTracker() {
         </button>
       </div>
 
-      {/* Active Section */}
+      {/* Task Section */}
       <motion.div
         key={activeSection.id}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -10 }}
         transition={{ duration: 0.3 }}
         className="max-w-2xl mx-auto"
       >
@@ -260,44 +265,70 @@ export default function TaskTracker() {
             </motion.div>
           ))}
         </AnimatePresence>
-
-        {activeSection.list.length === 0 && (
-          <p className="text-gray-400 text-sm italic text-center">
-            No items yet — add one above.
-          </p>
-        )}
-
-        {/* 💾 Cloud Backup / Restore Controls */}
-<div className="mt-10 flex justify-end">
-  <div className="flex flex-col items-end gap-3 bg-[#1a1d22aa] backdrop-blur-md p-4 rounded-lg border border-gray-700 max-w-sm shadow-lg">
-    <button
-      onClick={saveTasksToBlob}
-      disabled={uploading}
-      className="neon-button flex items-center justify-center gap-2 w-full"
-    >
-      <CloudUpload size={18} />
-      {uploading ? "Uploading..." : "Save Backup to Cloud"}
-    </button>
-
-    <input
-      type="text"
-      value={restoreURL}
-      onChange={(e) => setRestoreURL(e.target.value)}
-      placeholder="Paste cloud backup URL..."
-      className="w-full p-3 rounded-lg bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#44ff9a]"
-    />
-
-    <button
-      onClick={restoreTasksFromBlob}
-      disabled={restoring}
-      className="neon-button flex items-center justify-center gap-2 w-full bg-[#44ff9a22]"
-    >
-      <CloudDownload size={18} />
-      {restoring ? "Restoring..." : "Restore from Cloud"}
-    </button>
-  </div>
-</div>
       </motion.div>
+
+      {/* 🌐 Floating Cloud Control Widget */}
+      <div className="fixed bottom-6 right-6 z-50">
+        <motion.div
+          initial={false}
+          animate={{
+            width: showCloudPanel ? 300 : 56,
+            height: showCloudPanel ? "auto" : 56,
+          }}
+          transition={{ duration: 0.3 }}
+          className="bg-[#1a1d22cc] backdrop-blur-md border border-gray-700 rounded-2xl shadow-lg p-3 overflow-hidden"
+        >
+          {showCloudPanel ? (
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-between items-center mb-1">
+                <h4 className="font-orbitron text-sm text-gray-300 tracking-wider">
+                  Cloud Backup
+                </h4>
+                <button
+                  onClick={() => setShowCloudPanel(false)}
+                  className="text-gray-400 hover:text-gray-200"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <button
+                onClick={saveTasksToBlob}
+                disabled={uploading}
+                className="neon-button flex items-center justify-center gap-2 w-full"
+              >
+                <CloudUpload size={16} />
+                {uploading ? "Uploading..." : "Save Backup"}
+              </button>
+
+              <input
+                type="text"
+                value={restoreURL}
+                onChange={(e) => setRestoreURL(e.target.value)}
+                placeholder="Paste backup URL..."
+                className="w-full p-2 rounded bg-[#1e2229] text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#44ff9a]"
+              />
+
+              <button
+                onClick={restoreTasksFromBlob}
+                disabled={restoring}
+                className="neon-button flex items-center justify-center gap-2 w-full bg-[#44ff9a22]"
+              >
+                <CloudDownload size={16} />
+                {restoring ? "Restoring..." : "Restore"}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowCloudPanel(true)}
+              className="flex items-center justify-center text-white cloud-glow"
+              title="Open Cloud Backup"
+            >
+              <Cloud size={26} />
+            </button>
+          )}
+        </motion.div>
+      </div>
     </div>
   );
 }

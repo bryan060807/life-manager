@@ -159,3 +159,29 @@ a:hover { color: var(--accent-purple); }
   50% { box-shadow: 0 0 14px rgba(155, 89, 182, 0.3); }
 }
 .pulse { animation: glowPulse 4s infinite; }
+
+
+/* ==========================================================
+   ⚡ FLOATING CLOUD BUTTON GLOW EFFECT
+========================================================== */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(58, 160, 255, 0.4), 0 0 16px rgba(155, 89, 182, 0.3);
+    filter: drop-shadow(0 0 2px rgba(58, 160, 255, 0.5));
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(58, 160, 255, 0.7), 0 0 28px rgba(155, 89, 182, 0.6);
+    filter: drop-shadow(0 0 5px rgba(155, 89, 182, 0.6));
+  }
+}
+
+.cloud-glow {
+  animation: pulseGlow 3.5s ease-in-out infinite;
+  border-radius: 50%;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.cloud-glow:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 18px rgba(58, 160, 255, 0.8), 0 0 28px rgba(155, 89, 182, 0.5);
+}
