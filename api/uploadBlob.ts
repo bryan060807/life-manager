@@ -22,10 +22,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Upload JSON to your blob store
     const blob = await put(filename, content, {
-      access: "public",
-      addRandomSuffix: false,
-      token: process.env.BLOB_READ_WRITE_TOKEN, // ✅ explicitly pass the token
-    });
+  access: "public",
+  addRandomSuffix: false,
+  allowOverwrite: true, // ✅ enable overwriting the same blob
+  token: process.env.BLOB_READ_WRITE_TOKEN,
+});
+
 
     console.log("✅ Blob uploaded successfully:", blob.url);
     return res.status(200).json({ url: blob.url });
