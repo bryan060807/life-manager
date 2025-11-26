@@ -35,16 +35,19 @@ export default function TaskTracker() {
   const [showCloudPanel, setShowCloudPanel] = useState(false);
   const [synced, setSynced] = useState(true);
 
-  const saveTimeout = useRef<NodeJS.Timeout | null>(null);
-  const syncInterval = useRef<NodeJS.Timeout | null>(null);
-  const blobURL = "/api/uploadBlob"; // Replace with your Vercel Blob endpoint if needed
+  // ✅ Fix TypeScript NodeJS error using browser-safe types
+  const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 🧠 Save to localStorage
+  const blobUploadAPI = "/api/uploadBlob"; // your API route
+  const blobPublicFile = "/api/tasks-latest.json"; // optional public blob link
+
+  /* 🧠 Local Persistence */
   useEffect(() => {
     localStorage.setItem("tasks", JSON.stringify(tasks));
   }, [tasks]);
 
-  // 💾 Auto-save debounce
+  /* 💾 Debounced Auto-Save to Blob */
   useEffect(() => {
     if (tasks.length > 0) {
       if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -52,7 +55,7 @@ export default function TaskTracker() {
     }
   }, [tasks]);
 
-  // ☁️ Auto-fetch updates from Blob every 5 seconds
+  /* ☁️ Periodic Auto-Fetch from Cloud (5s) */
   useEffect(() => {
     syncInterval.current = setInterval(fetchLatestFromBlob, 5000);
     return () => {
@@ -80,7 +83,10 @@ export default function TaskTracker() {
     setTasks(updatedTasks);
   };
 
-  const deleteTask = (id: number) => setTasks(tasks.filter((t) => t.id !== id));
+  const deleteTask = (id: number) => {
+    const updatedTasks = tasks.filter((t) => t.id !== id);
+    setTasks(updatedTasks);
+  };
 
   const dailyTasks = tasks.filter((t) => t.type === "daily");
   const weeklyTasks = tasks.filter((t) => t.type === "weekly");
@@ -94,7 +100,9 @@ export default function TaskTracker() {
 
   const activeSection = sections.find((s) => s.id === activeTab)!;
 
-  // 💾 Manual save to Vercel Blob
+  /* === Cloud Functions === */
+
+  // 💾 Save to Vercel Blob
   const saveTasksToBlob = async (silent = false) => {
     if (tasks.length === 0) {
       if (!silent) alert("❌ No tasks to backup.");
@@ -103,13 +111,11 @@ export default function TaskTracker() {
 
     setUploading(true);
     try {
-      const filename = `tasks-latest.json`;
-
-      const res = await fetch(blobURL, {
+      const res = await fetch(blobUploadAPI, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filename,
+          filename: "tasks-latest.json",
           content: JSON.stringify(tasks, null, 2),
         }),
       });
@@ -120,7 +126,7 @@ export default function TaskTracker() {
       }
       setSynced(true);
     } catch (error) {
-      console.error("Upload failed:", error);
+      console.error("Blob upload failed:", error);
       if (!silent) alert("❌ Upload failed. Check console for details.");
       setSynced(false);
     } finally {
@@ -128,23 +134,23 @@ export default function TaskTracker() {
     }
   };
 
-  // 🔁 Auto-save handler
+  // 🔁 Debounced Auto-Save
   const autoSaveToBlob = async () => {
     await saveTasksToBlob(true);
     console.log("☁️ Auto-synced tasks to cloud.");
   };
 
-  // ☁️ Fetch latest cloud data
+  // ☁️ Auto-Fetch from Blob
   const fetchLatestFromBlob = async () => {
     try {
-      const res = await fetch("/api/tasks-latest.json"); // If Blob is public, use its URL directly
+      const res = await fetch(blobPublicFile);
       if (!res.ok) return;
-      const cloudData: Task[] = await res.json();
 
-      // Compare and update only if newer
-      const localHash = JSON.stringify(tasks);
-      const remoteHash = JSON.stringify(cloudData);
-      if (localHash !== remoteHash) {
+      const cloudData: Task[] = await res.json();
+      const localData = JSON.stringify(tasks);
+      const remoteData = JSON.stringify(cloudData);
+
+      if (localData !== remoteData) {
         setTasks(cloudData);
         setSynced(true);
         console.log("🛰 Cloud sync updated local tasks");
@@ -155,7 +161,7 @@ export default function TaskTracker() {
     }
   };
 
-  // ☁️ Manual restore
+  // ☁️ Restore Manually from URL
   const restoreTasksFromBlob = async () => {
     if (!restoreURL.trim()) {
       alert("❌ Please enter a valid backup URL first.");
@@ -166,8 +172,8 @@ export default function TaskTracker() {
     try {
       const res = await fetch(restoreURL);
       if (!res.ok) throw new Error("Failed to fetch backup file.");
-      const data: Task[] = await res.json();
 
+      const data: Task[] = await res.json();
       if (Array.isArray(data)) {
         setTasks(data);
         alert("✅ Tasks restored successfully!");
@@ -181,6 +187,8 @@ export default function TaskTracker() {
       setRestoring(false);
     }
   };
+
+  /* === UI === */
 
   return (
     <div className="space-y-8">
@@ -203,7 +211,7 @@ export default function TaskTracker() {
           AIBBRY’s Task Tracker
         </h1>
         <p className="text-gray-300 italic text-base tracking-wide">
-          Shared task list synced through the cloud 🧠☁️
+          Collaborative productivity — synced in real-time ☁️🧠
         </p>
       </motion.div>
 
@@ -362,11 +370,12 @@ export default function TaskTracker() {
               <div className="flex justify-between items-center mb-1">
                 <h4 className="font-orbitron text-sm text-gray-300 tracking-wider flex items-center gap-2">
                   Cloud Backup{" "}
-                  <Wifi
-                    size={14}
-                    className={synced ? "text-[#44ff9a]" : "text-[#ff6b6b]"}
-                    title={synced ? "Synced" : "Out of Sync"}
-                  />
+                  <span title={synced ? "Synced" : "Out of Sync"}>
+                    <Wifi
+                      size={14}
+                      className={synced ? "text-[#44ff9a]" : "text-[#ff6b6b]"}
+                    />
+                  </span>
                 </h4>
                 <button
                   onClick={() => setShowCloudPanel(false)}
