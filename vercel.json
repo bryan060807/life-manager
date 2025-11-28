@@ -8,20 +8,15 @@
       "config": { "distDir": "dist" }
     }
   ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ],
+  "framework": "vite",
+  "outputDirectory": "dist",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
   "env": {
     "VITE_SUPABASE_URL": "@vite_supabase_url",
     "VITE_SUPABASE_ANON_KEY": "@vite_supabase_anon_key"
   },
-  "framework": "vite",
-  "outputDirectory": "dist",
-  "installCommand": "npm install",
-  "buildCommand": "npm run build",
-  "cleanUrls": true,
-  "trailingSlash": false
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
