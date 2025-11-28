@@ -1,0 +1,21 @@
+{
+  "name": "AIBBRY’s Task Tracker",
+  "short_name": "AIBBRY Tracker",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "description": "A cyberpunk-themed Supabase-powered task tracker that syncs across devices.",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

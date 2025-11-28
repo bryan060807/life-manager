@@ -1,57 +1,117 @@
-// ======================================================
-// vite.config.ts — AIBBRY’s Task Tracker (Vercel Ready)
-// ======================================================
-
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 
-// https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
-  // Load environment variables from .env and .env.local
-  const env = loadEnv(mode, process.cwd(), "");
+// ======================================================
+//  Vite Configuration — AIBBRY’s Task Tracker
+//  Features:
+//  ⚡ React + TypeScript + TailwindCSS
+//  🔥 PWA Offline Support (manifest + service worker)
+//  ☁️ Supabase-friendly build (no SSR conflicts)
+//  🚀 Vercel-optimized output for static deployment
+// ======================================================
 
-  return {
-    plugins: [react()],
+export default defineConfig({
+  plugins: [
+    react(),
 
-    // Ensure your Vite build plays well with Vercel static output
-    build: {
-      outDir: "dist",
-      assetsDir: "assets",
-      sourcemap: false,
-      target: "esnext",
-      chunkSizeWarningLimit: 900,
-      cssMinify: "lightningcss",
-      rollupOptions: {
-        output: {
-          manualChunks: {
-            vendor: ["react", "react-dom"],
+    // ================================
+    // 🔥 PWA Integration
+    // ================================
+    VitePWA({
+      registerType: "autoUpdate",
+      includeAssets: [
+        "favicon.png",
+        "robots.txt",
+        "apple-touch-icon.png",
+        "backgrounds/city_fire_image.png",
+      ],
+      manifest: {
+        name: "AIBBRY’s Task Tracker",
+        short_name: "AIBBRY Tracker",
+        description:
+          "Cyberpunk-themed Supabase task tracker — synced, offline-ready, and fast.",
+        theme_color: "#0a0a0a",
+        background_color: "#0a0a0a",
+        display: "standalone",
+        start_url: "/",
+        icons: [
+          {
+            src: "/favicon.png",
+            sizes: "192x192",
+            type: "image/png",
           },
-        },
+          {
+            src: "/favicon.png",
+            sizes: "512x512",
+            type: "image/png",
+          },
+        ],
       },
-    },
-
-    // Environment variable exposure (VITE_ prefix only)
-    define: {
-      "process.env": env,
-    },
-
-    // Resolve common issues on Windows paths & imports
-    resolve: {
-      alias: {
-        "@": "/src",
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,png,svg,ico,json}"],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/([a-zA-Z0-9-]+\.)?supabase\.co\/.*$/,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "supabase-api-cache",
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 50, maxAgeSeconds: 86400 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts",
+              expiration: { maxEntries: 20, maxAgeSeconds: 31536000 },
+            },
+          },
+          {
+            urlPattern: /\.(png|jpg|jpeg|svg|gif|webp|avif)$/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "image-assets",
+              expiration: { maxEntries: 50, maxAgeSeconds: 2592000 },
+            },
+          },
+        ],
       },
-    },
+    }),
+  ],
 
-    // Recommended server settings for local dev
-    server: {
-      port: 5173,
-      open: true,
-      host: true,
-    },
+  // ================================
+  // ⚙️ Build Settings
+  // ================================
+  build: {
+    outDir: "dist",
+    sourcemap: false,
+    chunkSizeWarningLimit: 600,
+  },
 
-    // Optimize dependencies (helps Vercel builds)
-    optimizeDeps: {
-      include: ["@supabase/supabase-js", "framer-motion", "lucide-react"],
+  // ================================
+  // 🌍 Server Configuration
+  // ================================
+  server: {
+    host: true,
+    port: 5173,
+  },
+
+  // ================================
+  // ⚡ Resolve Aliases
+  // ================================
+  resolve: {
+    alias: {
+      "@": "/src",
     },
-  };
+  },
+
+  // ================================
+  // 🚀 Vercel Build Hint
+  // ================================
+  optimizeDeps: {
+    include: ["@supabase/supabase-js", "framer-motion", "lucide-react"],
+  },
 });

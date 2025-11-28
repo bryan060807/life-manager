@@ -1,0 +1,16 @@
+# ============================================================
+# 🤖 robots.txt — AIBBRY’s Task Tracker
+# Purpose: Control how search engines crawl and index the site
+# ============================================================
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /assets/
+Disallow: /_vercel/
+
+# Sitemap location (auto-generated below)
+Sitemap: https://life-manager.aibry.shop/sitemap.xml
+
+# Crawl-delay optional (helps with Supabase rate limits)
+Crawl-delay: 5
