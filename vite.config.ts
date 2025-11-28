@@ -3,12 +3,11 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 // ======================================================
-//  Vite Configuration — AIBBRY’s Task Tracker
-//  Features:
+//  🚀 AIBBRY’s Task Tracker - Vite Configuration
 //  ⚡ React + TypeScript + TailwindCSS
-//  🔥 PWA Offline Support (manifest + service worker)
-//  ☁️ Supabase-friendly build (no SSR conflicts)
-//  🚀 Vercel-optimized output for static deployment
+//  🔥 Full PWA support (installable, offline-ready)
+//  ☁️ Supabase-friendly static deployment
+//  🌐 Optimized for Vercel Hosting
 // ======================================================
 
 export default defineConfig({
@@ -32,26 +31,39 @@ export default defineConfig({
         description:
           "Cyberpunk-themed Supabase task tracker — synced, offline-ready, and fast.",
         theme_color: "#0a0a0a",
-        background_color: "#0a0a0a",
+        background_color: "#000000",
         display: "standalone",
+        orientation: "portrait",
         start_url: "/",
+        scope: "/",
         icons: [
           {
-            src: "/favicon.png",
+            src: "/icons/icon-192x192.png",
             sizes: "192x192",
             type: "image/png",
           },
           {
-            src: "/favicon.png",
+            src: "/icons/icon-512x512.png",
             sizes: "512x512",
             type: "image/png",
           },
+          {
+            src: "/icons/icon-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable any",
+          },
         ],
       },
+
+      // ================================
+      // ⚙️ Workbox (Offline Cache Rules)
+      // ================================
       workbox: {
         globPatterns: ["**/*.{js,css,html,png,svg,ico,json}"],
         runtimeCaching: [
           {
+            // Supabase REST + storage requests
             urlPattern: /^https:\/\/([a-zA-Z0-9-]+\.)?supabase\.co\/.*$/,
             handler: "NetworkFirst",
             options: {
@@ -62,6 +74,7 @@ export default defineConfig({
             },
           },
           {
+            // Google Fonts
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
             handler: "CacheFirst",
             options: {
@@ -70,11 +83,21 @@ export default defineConfig({
             },
           },
           {
+            // Images & Assets
             urlPattern: /\.(png|jpg|jpeg|svg|gif|webp|avif)$/i,
             handler: "CacheFirst",
             options: {
               cacheName: "image-assets",
-              expiration: { maxEntries: 50, maxAgeSeconds: 2592000 },
+              expiration: { maxEntries: 60, maxAgeSeconds: 2592000 },
+            },
+          },
+          {
+            // Fallback for index.html
+            urlPattern: ({ request }) => request.mode === "navigate",
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "pages-cache",
+              expiration: { maxEntries: 10, maxAgeSeconds: 86400 },
             },
           },
         ],
@@ -88,11 +111,11 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: false,
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 800,
   },
 
   // ================================
-  // 🌍 Server Configuration
+  // 🌍 Dev Server Settings
   // ================================
   server: {
     host: true,
@@ -100,7 +123,7 @@ export default defineConfig({
   },
 
   // ================================
-  // ⚡ Resolve Aliases
+  // 🔗 Path Aliases
   // ================================
   resolve: {
     alias: {
@@ -109,9 +132,14 @@ export default defineConfig({
   },
 
   // ================================
-  // 🚀 Vercel Build Hint
+  // 🚀 Dependency Optimization
   // ================================
   optimizeDeps: {
-    include: ["@supabase/supabase-js", "framer-motion", "lucide-react"],
+    include: [
+      "@supabase/supabase-js",
+      "framer-motion",
+      "lucide-react",
+      "vite-plugin-pwa",
+    ],
   },
 });
