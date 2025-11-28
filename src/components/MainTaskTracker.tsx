@@ -1,6 +1,6 @@
 // ======================================================
 //  src/components/MainTaskTracker.tsx
-//  AIBBRY’s Task Tracker — HUD Menu + Last Sync Timestamp
+//  AIBBRY’s Task Tracker — HUD Dashboard (Final)
 // ======================================================
 
 import { useState, useEffect } from "react";
@@ -15,6 +15,7 @@ import {
   LogOut,
   XCircle,
   Clock,
+  User,
 } from "lucide-react";
 import supabase from "../lib/supabaseClient";
 
@@ -174,9 +175,7 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
     setTimeout(() => setShowToast(false), 2500);
   };
 
-  const filteredTasks = tasks.filter(
-    (t) => t.type === activeTab && !t.deleted
-  );
+  const filteredTasks = tasks.filter((t) => t.type === activeTab && !t.deleted);
 
   const sections = [
     { label: "Daily", id: "daily", color: "#3aa0ff" },
@@ -194,90 +193,68 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
   // ======================================================
   return (
     <div className="space-y-8 p-4 relative">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8 }}
-        className="text-center mb-6 relative"
-      >
-        <h1
-          className="font-orbitron text-3xl md:text-4xl text-white mb-2 tracking-wide"
-          style={{
-            textShadow: "0 0 12px rgba(58,160,255,0.6)",
-            background: "linear-gradient(to right, #3aa0ff, #9b59b6)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
-          AIBBRY’s Task Tracker
-        </h1>
-        <p className="text-gray-400 italic text-sm">
-          {user.email} — synced via Supabase ☁️
-        </p>
-
-        {/* HUD Menu */}
-        <div className="absolute top-2 right-4">
-          <div className="relative">
-            <button
-              onClick={() => setMenuOpen((prev) => !prev)}
-              className="p-2 rounded-full bg-[#1e2229] text-white hover:bg-[#2b2f37] shadow-md transition-all"
-            >
-              <MoreVertical size={18} />
-            </button>
-
-            {menuOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                transition={{ duration: 0.2 }}
-                className="absolute right-0 mt-2 bg-[#1c1e24] border border-gray-700 rounded-lg shadow-lg py-2 w-48 z-20"
-              >
-                <button
-                  onClick={() => {
-                    purgeDeleted();
-                    setMenuOpen(false);
-                  }}
-                  className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
-                >
-                  <XCircle size={16} className="mr-2 text-[#ff6b6b]" />
-                  Purge Deleted
-                </button>
-
-                <button
-                  onClick={() => {
-                    refreshSync();
-                    setMenuOpen(false);
-                  }}
-                  className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
-                >
-                  <RefreshCcw size={16} className="mr-2 text-[#3aa0ff]" />
-                  Refresh Sync
-                </button>
-
-                <button
-                  onClick={() => {
-                    handleSignOut();
-                    setMenuOpen(false);
-                  }}
-                  className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
-                >
-                  <LogOut size={16} className="mr-2 text-[#9b59b6]" />
-                  Sign Out
-                </button>
-
-                <div className="border-t border-gray-700 my-1"></div>
-
-                <div className="flex items-center gap-2 px-3 py-2 text-xs text-gray-400">
-                  <Clock size={14} className="text-[#44ff9a]" />
-                  Last Synced: <span className="text-gray-200">{formatLastSync(lastSynced)}</span>
-                </div>
-              </motion.div>
-            )}
-          </div>
+      {/* HUD Top Bar */}
+      <div className="flex justify-between items-center mb-4 px-4 py-3 glass-card backdrop-blur-md border border-gray-700 rounded-lg shadow-lg">
+        <div className="flex items-center gap-2 text-sm text-gray-300">
+          <User size={16} className="text-[#44ff9a]" />
+          <span className="font-mono">{user.email}</span>
+          <span className="text-gray-500 text-xs ml-2">
+            • Last Synced: <span className="text-gray-300">{formatLastSync(lastSynced)}</span>
+          </span>
         </div>
-      </motion.div>
+
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen((p) => !p)}
+            className="p-2 rounded-full bg-[#1e2229] text-white hover:bg-[#2b2f37] shadow-md transition-all"
+          >
+            <MoreVertical size={18} />
+          </button>
+
+          {menuOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.2 }}
+              className="absolute right-0 mt-2 bg-[#1c1e24] border border-gray-700 rounded-lg shadow-lg py-2 w-48 z-20"
+            >
+              <button
+                onClick={() => {
+                  purgeDeleted();
+                  setMenuOpen(false);
+                }}
+                className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
+              >
+                <XCircle size={16} className="mr-2 text-[#ff6b6b]" />
+                Purge Deleted
+              </button>
+
+              <button
+                onClick={() => {
+                  refreshSync();
+                  setMenuOpen(false);
+                }}
+                className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
+              >
+                <RefreshCcw size={16} className="mr-2 text-[#3aa0ff]" />
+                Refresh Sync
+              </button>
+
+              <button
+                onClick={() => {
+                  handleSignOut();
+                  setMenuOpen(false);
+                }}
+                className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
+              >
+                <LogOut size={16} className="mr-2 text-[#9b59b6]" />
+                Sign Out
+              </button>
+            </motion.div>
+          )}
+        </div>
+      </div>
 
       {/* Add Task */}
       <div className="flex flex-wrap gap-3 justify-center mb-6">

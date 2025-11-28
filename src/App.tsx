@@ -1,6 +1,5 @@
 // ======================================================
-//  src/App.tsx
-//  AIBBRY’s Task Tracker — Cyberdark mode only
+//  src/App.tsx — AIBBRY’s Task Tracker (No Duplicate Header)
 // ======================================================
 
 import { useState } from "react";
@@ -16,7 +15,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0a0c10] text-white transition-all duration-700 p-6 relative overflow-hidden">
-      {/* Background Glow Effect */}
+      {/* Background Glow */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -25,21 +24,6 @@ export default function App() {
           zIndex: 0,
         }}
       />
-
-      {/* Header */}
-      <header className="flex justify-center items-center mb-8 relative z-10">
-        <h1
-          className="font-orbitron text-3xl md:text-4xl text-center tracking-wide"
-          style={{
-            background: "linear-gradient(to right, #3aa0ff, #9b59b6)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            textShadow: "0 0 10px rgba(58,160,255,0.3)",
-          }}
-        >
-          AIBBRY’s Task Tracker
-        </h1>
-      </header>
 
       {/* Main Content */}
       <motion.main
@@ -61,7 +45,6 @@ export default function App() {
         Stay productive, MotherFucker!
       </footer>
 
-      {/* ✅ Vercel Analytics */}
       <Analytics />
     </div>
   );
