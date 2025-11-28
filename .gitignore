@@ -7,10 +7,20 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies and builds
 node_modules
 dist
 dist-ssr
+.vite
 *.local
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# TypeScript cache
+*.tsbuildinfo
 
 # Editor directories and files
 .vscode/*
@@ -22,4 +32,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Vercel
 .vercel
+
+# Supabase local environment
+.supabase

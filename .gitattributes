@@ -1,0 +1,66 @@
+# ==========================================================
+# 🧬 .gitattributes — AIBBRY’s Task Tracker
+# Purpose: Normalize line endings, enforce consistent diffs,
+# and ensure text files behave identically on all OSes
+# ==========================================================
+
+# Auto-detect text files and normalize line endings to LF
+* text=auto eol=lf
+
+# Force LF endings for source files
+*.js   text eol=lf
+*.jsx  text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.css  text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# ==========================================================
+# 📦 Binary files (do NOT modify line endings)
+# ==========================================================
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.svg  binary
+*.webp binary
+*.mp4  binary
+*.mov  binary
+*.mp3  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.eot  binary
+
+# ==========================================================
+# 🧠 GitHub Linguist / diff handling
+# ==========================================================
+# Mark build output and dependencies as generated
+dist/* linguist-generated=true
+node_modules/* linguist-generated=true
+
+# Ignore minified files in diffs
+*.min.js -diff
+*.min.css -diff
+
+# Ignore lockfiles in diffs
+package-lock.json -diff
+pnpm-lock.yaml -diff
+yarn.lock -diff
+
+# ==========================================================
+# 🚀 Optional: enforce prettier-compatible formatting
+# ==========================================================
+# (if you’re using Prettier)
+*.{js,jsx,ts,tsx,css,scss,html,json,md,yml,yaml} text eol=lf diff=auto
+
+# ==========================================================
+# 🔒 Security
+# ==========================================================
+# Prevent accidental commits of environment files
+.env* export-ignore
