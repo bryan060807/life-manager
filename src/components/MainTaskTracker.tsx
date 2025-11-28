@@ -1,6 +1,6 @@
 // ======================================================
 //  src/components/MainTaskTracker.tsx
-//  AIBBRY’s Task Tracker — 3-Panel Dashboard + Mobile Collapsible
+//  AIBBRY’s Task Tracker — Fixed Realtime + Collapsible Panels
 // ======================================================
 
 import { useState, useEffect } from "react";
@@ -83,6 +83,8 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
 
   useEffect(() => {
     fetchTasks();
+
+    // ✅ Corrected subscription (not async)
     const channel = supabase
       .channel("tasks-realtime")
       .on(
@@ -94,9 +96,14 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
           filter: `user_id=eq.${user.id}`,
         },
         () => fetchTasks()
-      )
-      .subscribe();
-    return () => supabase.removeChannel(channel);
+      );
+
+    channel.subscribe(); // not awaited
+
+    // ✅ Cleanup must be synchronous
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   // ======================================================
@@ -311,7 +318,7 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
         </button>
       </div>
 
-      {/* Task Sections */}
+      {/* Sections */}
       <div className="grid md:grid-cols-3 gap-8">
         {[
           { label: "Daily Tasks", type: "daily", color: "#3aa0ff" },
@@ -319,7 +326,6 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
           { label: "Things to Buy", type: "buy", color: "#44ff9a" },
         ].map((section) => (
           <div key={section.type}>
-            {/* Section Header */}
             <button
               className="w-full flex justify-between items-center mb-3 md:cursor-default md:mb-4"
               onClick={() => toggleSection(section.type as any)}
