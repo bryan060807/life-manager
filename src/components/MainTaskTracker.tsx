@@ -1,6 +1,6 @@
 // ======================================================
 //  src/components/MainTaskTracker.tsx
-//  AIBBRY’s Task Tracker — Fixed Realtime + Collapsible Panels
+//  AIBBRY’s Shared Task Tracker — Full Realtime Sync
 // ======================================================
 
 import { useState, useEffect } from "react";
@@ -29,7 +29,6 @@ interface Task {
   last_updated_by?: string;
   last_modified: string;
   deleted?: boolean;
-  user_id: string;
 }
 
 interface Props {
@@ -63,14 +62,13 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
   };
 
   // ======================================================
-  // Fetch + Sync Logic
+  // Fetch + Sync Logic (shared across all users)
   // ======================================================
   const fetchTasks = async () => {
     setSyncing(true);
     const { data, error } = await supabase
       .from("tasks")
       .select("*")
-      .eq("user_id", user.id)
       .order("last_modified", { ascending: false });
 
     if (error) console.error("Fetch error:", error);
@@ -84,7 +82,7 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
   useEffect(() => {
     fetchTasks();
 
-    // ✅ Corrected subscription (not async)
+    // ✅ Realtime subscription for shared task list (no user filter)
     const channel = supabase
       .channel("tasks-realtime")
       .on(
@@ -93,18 +91,16 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
           event: "*",
           schema: "public",
           table: "tasks",
-          filter: `user_id=eq.${user.id}`,
         },
         () => fetchTasks()
       );
 
-    channel.subscribe(); // not awaited
+    channel.subscribe();
 
-    // ✅ Cleanup must be synchronous
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, []);
 
   // ======================================================
   // CRUD Operations
@@ -117,7 +113,6 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
         done: false,
         type,
         added_by: addedBy,
-        user_id: user.id,
         last_updated_by: addedBy,
         last_modified: new Date().toISOString(),
       },
@@ -139,8 +134,7 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
         last_updated_by: addedBy || "Unknown",
         last_modified: new Date().toISOString(),
       })
-      .eq("id", task.id)
-      .eq("user_id", user.id);
+      .eq("id", task.id);
     if (error) console.error("Toggle failed:", error);
     else fetchTasks();
     setSyncing(false);
@@ -154,8 +148,7 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
         deleted: true,
         last_modified: new Date().toISOString(),
       })
-      .eq("id", task.id)
-      .eq("user_id", user.id);
+      .eq("id", task.id);
     if (error) console.error("Delete failed:", error);
     else showTemporaryToast("🗑️ Task deleted");
     setSyncing(false);
@@ -163,11 +156,7 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
 
   const purgeDeleted = async () => {
     setSyncing(true);
-    const { error } = await supabase
-      .from("tasks")
-      .delete()
-      .eq("deleted", true)
-      .eq("user_id", user.id);
+    const { error } = await supabase.from("tasks").delete().eq("deleted", true);
     if (error) console.error("Purge failed:", error);
     else showTemporaryToast("🧹 Deleted tasks purged");
     setSyncing(false);
@@ -219,10 +208,10 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
             WebkitTextFillColor: "transparent",
           }}
         >
-          AIBBRY’s Task Tracker
+          AIBBRY’s Shared Task Tracker
         </h1>
         <p className="text-gray-400 italic text-sm">
-          {user.email} — synced via Supabase ☁️
+          Shared workspace — synced in real-time ☁️
         </p>
 
         {/* HUD Menu */}
