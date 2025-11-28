@@ -1,6 +1,6 @@
 // ======================================================
 //  src/components/MainTaskTracker.tsx
-//  AIBBRY’s Task Tracker — HUD Dashboard (Final)
+//  AIBBRY’s Task Tracker — Neon Pulse Dashboard
 // ======================================================
 
 import { useState, useEffect } from "react";
@@ -56,7 +56,6 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
     const { data, error } = await supabase
       .from("tasks")
       .select("*")
-      .eq("user_id", user.id)
       .order("last_modified", { ascending: false });
 
     if (error) {
@@ -81,7 +80,6 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
           event: "*",
           schema: "public",
           table: "tasks",
-          filter: `user_id=eq.${user.id}`,
         },
         () => fetchTasks()
       )
@@ -90,7 +88,7 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, []);
 
   // ======================================================
   // CRUD Operations
@@ -103,7 +101,6 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
         done: false,
         type,
         added_by: addedBy,
-        user_id: user.id,
         last_updated_by: addedBy,
         last_modified: new Date().toISOString(),
       },
@@ -125,8 +122,7 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
         last_updated_by: addedBy || "Unknown",
         last_modified: new Date().toISOString(),
       })
-      .eq("id", task.id)
-      .eq("user_id", user.id);
+      .eq("id", task.id);
     if (error) console.error("Toggle failed:", error);
     else fetchTasks();
     setSyncing(false);
@@ -140,8 +136,7 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
         deleted: true,
         last_modified: new Date().toISOString(),
       })
-      .eq("id", task.id)
-      .eq("user_id", user.id);
+      .eq("id", task.id);
     if (error) console.error("Delete failed:", error);
     else showTemporaryToast("🗑️ Task deleted");
     setSyncing(false);
@@ -149,11 +144,7 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
 
   const purgeDeleted = async () => {
     setSyncing(true);
-    const { error } = await supabase
-      .from("tasks")
-      .delete()
-      .eq("deleted", true)
-      .eq("user_id", user.id);
+    const { error } = await supabase.from("tasks").delete().eq("deleted", true);
     if (error) console.error("Purge failed:", error);
     else showTemporaryToast("🧹 Deleted tasks purged");
     setSyncing(false);
@@ -193,6 +184,36 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
   // ======================================================
   return (
     <div className="space-y-8 p-4 relative">
+      {/* App Title with Neon Pulse */}
+      <motion.div
+        className="text-center mt-2 mb-6"
+        initial={{ opacity: 0, y: -15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+      >
+        <motion.h1
+          className="font-orbitron text-3xl md:text-4xl tracking-wide text-white"
+          style={{
+            textShadow: "0 0 20px rgba(58,160,255,0.7)",
+            background: "linear-gradient(90deg, #3aa0ff, #9b59b6, #44ff9a, #3aa0ff)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+          }}
+          animate={{
+            textShadow: [
+              "0 0 10px rgba(58,160,255,0.5)",
+              "0 0 25px rgba(155,89,182,0.7)",
+              "0 0 15px rgba(68,255,154,0.6)",
+              "0 0 10px rgba(58,160,255,0.5)",
+            ],
+          }}
+          transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
+        >
+          AIBBRY’s Task Tracker
+        </motion.h1>
+        <p className="text-gray-400 italic text-sm">Shared list synced via Supabase ☁️</p>
+      </motion.div>
+
       {/* HUD Top Bar */}
       <div className="flex justify-between items-center mb-4 px-4 py-3 glass-card backdrop-blur-md border border-gray-700 rounded-lg shadow-lg">
         <div className="flex items-center gap-2 text-sm text-gray-300">
