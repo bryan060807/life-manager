@@ -1,6 +1,6 @@
 // ======================================================
 //  src/components/MainTaskTracker.tsx
-//  AIBBRY’s Task Tracker — Main Task Logic
+//  AIBBRY’s Task Tracker — HUD Menu + Last Sync Timestamp
 // ======================================================
 
 import { useState, useEffect } from "react";
@@ -10,8 +10,11 @@ import {
   Trash2,
   CheckCircle,
   Wifi,
-  Sun,
-  Moon,
+  MoreVertical,
+  RefreshCcw,
+  LogOut,
+  XCircle,
+  Clock,
 } from "lucide-react";
 import supabase from "../lib/supabaseClient";
 
@@ -29,33 +32,26 @@ interface Task {
 
 interface Props {
   user: any;
+  onSignOut?: () => void;
 }
 
-export default function MainTaskTracker({ user }: Props) {
+export default function MainTaskTracker({ user, onSignOut }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [input, setInput] = useState("");
   const [addedBy, setAddedBy] = useState("");
   const [type, setType] = useState<"daily" | "weekly" | "buy">("daily");
   const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "buy">("daily");
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
   const [syncing, setSyncing] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
-
-  // ======================================================
-  // Theme Handling
-  // ======================================================
-  useEffect(() => {
-    const root = document.documentElement;
-    if (darkMode) root.classList.add("dark");
-    else root.classList.remove("dark");
-    localStorage.setItem("theme", darkMode ? "dark" : "light");
-  }, [darkMode]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
 
   // ======================================================
   // Fetch Tasks
   // ======================================================
   const fetchTasks = async () => {
+    setSyncing(true);
     const { data, error } = await supabase
       .from("tasks")
       .select("*")
@@ -64,9 +60,11 @@ export default function MainTaskTracker({ user }: Props) {
 
     if (error) {
       console.error("Fetch error:", error);
-      return;
+    } else {
+      setTasks(data || []);
+      setLastSynced(new Date());
     }
-    setTasks(data || []);
+    setSyncing(false);
   };
 
   // ======================================================
@@ -113,6 +111,7 @@ export default function MainTaskTracker({ user }: Props) {
     else {
       setInput("");
       showTemporaryToast("✅ Task added");
+      fetchTasks();
     }
   };
 
@@ -128,6 +127,7 @@ export default function MainTaskTracker({ user }: Props) {
       .eq("id", task.id)
       .eq("user_id", user.id);
     if (error) console.error("Toggle failed:", error);
+    else fetchTasks();
     setSyncing(false);
   };
 
@@ -158,18 +158,22 @@ export default function MainTaskTracker({ user }: Props) {
     setSyncing(false);
   };
 
-  // ======================================================
-  // Toast Handler
-  // ======================================================
+  const refreshSync = () => {
+    showTemporaryToast("🔄 Refreshing sync...");
+    fetchTasks();
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    onSignOut?.();
+  };
+
   const showTemporaryToast = (msg: string) => {
     setToastMessage(msg);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 2500);
   };
 
-  // ======================================================
-  // Filtered Tasks
-  // ======================================================
   const filteredTasks = tasks.filter(
     (t) => t.type === activeTab && !t.deleted
   );
@@ -180,8 +184,13 @@ export default function MainTaskTracker({ user }: Props) {
     { label: "Buy", id: "buy", color: "#44ff9a" },
   ];
 
+  const formatLastSync = (date: Date | null) => {
+    if (!date) return "Not yet synced";
+    return `${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  };
+
   // ======================================================
-  // Render
+  // UI
   // ======================================================
   return (
     <div className="space-y-8 p-4 relative">
@@ -192,14 +201,6 @@ export default function MainTaskTracker({ user }: Props) {
         transition={{ duration: 0.8 }}
         className="text-center mb-6 relative"
       >
-        <button
-          onClick={() => setDarkMode(!darkMode)}
-          className="absolute top-6 left-6 p-3 rounded-full bg-[#1e2229] text-white hover:scale-110 transition-transform"
-          title="Toggle Theme"
-        >
-          {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
-
         <h1
           className="font-orbitron text-3xl md:text-4xl text-white mb-2 tracking-wide"
           style={{
@@ -214,9 +215,71 @@ export default function MainTaskTracker({ user }: Props) {
         <p className="text-gray-400 italic text-sm">
           {user.email} — synced via Supabase ☁️
         </p>
+
+        {/* HUD Menu */}
+        <div className="absolute top-2 right-4">
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen((prev) => !prev)}
+              className="p-2 rounded-full bg-[#1e2229] text-white hover:bg-[#2b2f37] shadow-md transition-all"
+            >
+              <MoreVertical size={18} />
+            </button>
+
+            {menuOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                transition={{ duration: 0.2 }}
+                className="absolute right-0 mt-2 bg-[#1c1e24] border border-gray-700 rounded-lg shadow-lg py-2 w-48 z-20"
+              >
+                <button
+                  onClick={() => {
+                    purgeDeleted();
+                    setMenuOpen(false);
+                  }}
+                  className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
+                >
+                  <XCircle size={16} className="mr-2 text-[#ff6b6b]" />
+                  Purge Deleted
+                </button>
+
+                <button
+                  onClick={() => {
+                    refreshSync();
+                    setMenuOpen(false);
+                  }}
+                  className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
+                >
+                  <RefreshCcw size={16} className="mr-2 text-[#3aa0ff]" />
+                  Refresh Sync
+                </button>
+
+                <button
+                  onClick={() => {
+                    handleSignOut();
+                    setMenuOpen(false);
+                  }}
+                  className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
+                >
+                  <LogOut size={16} className="mr-2 text-[#9b59b6]" />
+                  Sign Out
+                </button>
+
+                <div className="border-t border-gray-700 my-1"></div>
+
+                <div className="flex items-center gap-2 px-3 py-2 text-xs text-gray-400">
+                  <Clock size={14} className="text-[#44ff9a]" />
+                  Last Synced: <span className="text-gray-200">{formatLastSync(lastSynced)}</span>
+                </div>
+              </motion.div>
+            )}
+          </div>
+        </div>
       </motion.div>
 
-      {/* Input */}
+      {/* Add Task */}
       <div className="flex flex-wrap gap-3 justify-center mb-6">
         <input
           value={input}
@@ -268,7 +331,7 @@ export default function MainTaskTracker({ user }: Props) {
         ))}
       </div>
 
-      {/* Tasks */}
+      {/* Task List */}
       <div className="max-w-2xl mx-auto space-y-2">
         <AnimatePresence>
           {filteredTasks.map((task) => (
@@ -325,17 +388,7 @@ export default function MainTaskTracker({ user }: Props) {
         </AnimatePresence>
       </div>
 
-      {/* Purge Button */}
-      <div className="flex justify-center mt-6">
-        <button
-          onClick={purgeDeleted}
-          className="neon-button flex items-center gap-2 bg-[#ff6b6b22] hover:bg-[#ff6b6b33]"
-        >
-          🧹 Purge Deleted
-        </button>
-      </div>
-
-      {/* Toasts */}
+      {/* Toast */}
       <AnimatePresence>
         {showToast && (
           <motion.div
