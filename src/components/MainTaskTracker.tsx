@@ -1,9 +1,8 @@
 // ======================================================
-//  src/components/MainTaskTracker.tsx
+//  src/components/MainTaskTracker.tsx  (FULL OPTIMISED)
 //  AIBBRY’s Shared Task Tracker — Full Realtime Sync
 // ======================================================
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   PlusCircle,
@@ -19,6 +18,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import supabase from "../lib/supabaseClient";
+import { toast } from "../lib/toast";
 
 interface Task {
   id: number;
@@ -42,69 +42,42 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
   const [addedBy, setAddedBy] = useState("");
   const [type, setType] = useState<"daily" | "weekly" | "buy">("daily");
   const [syncing, setSyncing] = useState(false);
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  const [openSections, setOpenSections] = useState({ daily: true, weekly: false, buy: false });
 
-  // Mobile collapsible sections
-  const [openSections, setOpenSections] = useState({
-    daily: true,
-    weekly: false,
-    buy: false,
-  });
-
-  const toggleSection = (section: "daily" | "weekly" | "buy") => {
-    setOpenSections((prev) => ({
-      ...prev,
-      [section]: !prev[section],
-    }));
-  };
-
-  // ======================================================
-  // Fetch + Sync Logic (shared across all users)
-  // ======================================================
-  const fetchTasks = async () => {
+  /* ----------  FETCH  ---------- */
+  const fetchTasks = useCallback(async () => {
     setSyncing(true);
     const { data, error } = await supabase
       .from("tasks")
       .select("*")
       .order("last_modified", { ascending: false });
 
-    if (error) console.error("Fetch error:", error);
-    else {
+    if (error) {
+      toast("❌ Fetch failed", error.message);
+      console.error(error);
+    } else {
       setTasks(data || []);
       setLastSynced(new Date());
     }
     setSyncing(false);
-  };
+  }, []);
 
+  /* ----------  REALTIME  (defer until mount)  ---------- */
   useEffect(() => {
-    fetchTasks();
-
-    // ✅ Realtime subscription for shared task list (no user filter)
+    fetchTasks(); // initial
     const channel = supabase
       .channel("tasks-realtime")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "tasks",
-        },
-        () => fetchTasks()
-      );
-
-    channel.subscribe();
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => fetchTasks())
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [fetchTasks]);
 
-  // ======================================================
-  // CRUD Operations
-  // ======================================================
+  /* ----------  CRUD  ---------- */
   const addTask = async () => {
     if (!input.trim() || !addedBy.trim()) return;
     const { error } = await supabase.from("tasks").insert([
@@ -117,12 +90,10 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
         last_modified: new Date().toISOString(),
       },
     ]);
-    if (error) console.error("Add task failed:", error);
-    else {
-      setInput("");
-      showTemporaryToast("✅ Task added");
-      fetchTasks();
-    }
+    if (error) return toast("❌ Add failed", error.message);
+    setInput("");
+    toast("✅ Task added");
+    fetchTasks();
   };
 
   const toggleTask = async (task: Task) => {
@@ -135,35 +106,32 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
         last_modified: new Date().toISOString(),
       })
       .eq("id", task.id);
-    if (error) console.error("Toggle failed:", error);
-    else fetchTasks();
+    if (error) toast("❌ Toggle failed", error.message);
     setSyncing(false);
+    fetchTasks();
   };
 
   const deleteTask = async (task: Task) => {
     setSyncing(true);
     const { error } = await supabase
       .from("tasks")
-      .update({
-        deleted: true,
-        last_modified: new Date().toISOString(),
-      })
+      .update({ deleted: true, last_modified: new Date().toISOString() })
       .eq("id", task.id);
-    if (error) console.error("Delete failed:", error);
-    else showTemporaryToast("🗑️ Task deleted");
+    if (error) toast("❌ Delete failed", error.message);
+    else toast("🗑️ Task deleted");
     setSyncing(false);
   };
 
   const purgeDeleted = async () => {
     setSyncing(true);
     const { error } = await supabase.from("tasks").delete().eq("deleted", true);
-    if (error) console.error("Purge failed:", error);
-    else showTemporaryToast("🧹 Deleted tasks purged");
+    if (error) toast("❌ Purge failed", error.message);
+    else toast("🧹 Deleted tasks purged");
     setSyncing(false);
   };
 
   const refreshSync = () => {
-    showTemporaryToast("🔄 Refreshing sync...");
+    toast("🔄 Refreshing sync...");
     fetchTasks();
   };
 
@@ -172,24 +140,14 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
     onSignOut?.();
   };
 
-  const showTemporaryToast = (msg: string) => {
-    setToastMessage(msg);
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 2500);
-  };
-
-  const formatLastSync = (date: Date | null) =>
-    date ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Never";
-
+  /* ----------  DERIVED  ---------- */
   const filtered = {
     daily: tasks.filter((t) => t.type === "daily" && !t.deleted),
     weekly: tasks.filter((t) => t.type === "weekly" && !t.deleted),
     buy: tasks.filter((t) => t.type === "buy" && !t.deleted),
   };
 
-  // ======================================================
-  // UI
-  // ======================================================
+  /* ----------  RENDER  ---------- */
   return (
     <div className="space-y-8 p-4 relative">
       {/* Header */}
@@ -199,82 +157,68 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
         transition={{ duration: 0.8 }}
         className="text-center mb-6 relative"
       >
-        <h1
-          className="font-orbitron text-3xl md:text-4xl text-white mb-2 tracking-wide"
-          style={{
-            textShadow: "0 0 12px rgba(58,160,255,0.6)",
-            background: "linear-gradient(to right, #3aa0ff, #9b59b6)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-          }}
-        >
-          AIBBRY’s Shared Task Tracker
-        </h1>
-        <p className="text-gray-400 italic text-sm">
-          Shared workspace — synced in real-time ☁️
-        </p>
+        <h1 className="font-orbitron text-3xl md:text-4xl title-gradient">AIBBRY’s Shared Task Tracker</h1>
+        <p className="text-gray-400 italic text-sm">Shared workspace — synced in real-time ☁️</p>
 
-        {/* HUD Menu */}
         <div className="absolute top-2 right-4">
-          <div className="relative">
-            <button
-              onClick={() => setMenuOpen((p) => !p)}
-              className="p-2 rounded-full bg-[#1e2229] text-white hover:bg-[#2b2f37] shadow-md transition-all"
+          <button
+            onClick={() => setMenuOpen((p) => !p)}
+            className="p-2 rounded-full bg-[#1e2229] text-white hover:bg-[#2b2f37] shadow-md transition"
+          >
+            <MoreVertical size={18} />
+          </button>
+
+          {menuOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              className="absolute right-0 mt-2 bg-[#1c1e24] border border-gray-700 rounded-lg shadow-lg py-2 w-48 z-20"
             >
-              <MoreVertical size={18} />
-            </button>
-
-            {menuOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                transition={{ duration: 0.2 }}
-                className="absolute right-0 mt-2 bg-[#1c1e24] border border-gray-700 rounded-lg shadow-lg py-2 w-48 z-20"
+              <button
+                onClick={() => {
+                  purgeDeleted();
+                  setMenuOpen(false);
+                }}
+                className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
               >
-                <button
-                  onClick={() => {
-                    purgeDeleted();
-                    setMenuOpen(false);
-                  }}
-                  className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
-                >
-                  <XCircle size={16} className="mr-2 text-[#ff6b6b]" />
-                  Purge Deleted
-                </button>
+                <XCircle size={16} className="mr-2 text-[#ff6b6b]" />
+                Purge Deleted
+              </button>
 
-                <button
-                  onClick={() => {
-                    refreshSync();
-                    setMenuOpen(false);
-                  }}
-                  className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
-                >
-                  <RefreshCcw size={16} className="mr-2 text-[#3aa0ff]" />
-                  Refresh Sync
-                </button>
+              <button
+                onClick={() => {
+                  refreshSync();
+                  setMenuOpen(false);
+                }}
+                className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
+              >
+                <RefreshCcw size={16} className="mr-2 text-[#3aa0ff]" />
+                Refresh Sync
+              </button>
 
-                <button
-                  onClick={() => {
-                    handleSignOut();
-                    setMenuOpen(false);
-                  }}
-                  className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
-                >
-                  <LogOut size={16} className="mr-2 text-[#9b59b6]" />
-                  Sign Out
-                </button>
+              <button
+                onClick={() => {
+                  handleSignOut();
+                  setMenuOpen(false);
+                }}
+                className="flex items-center w-full px-3 py-2 text-left text-gray-200 hover:bg-[#2a2d34] transition"
+              >
+                <LogOut size={16} className="mr-2 text-[#9b59b6]" />
+                Sign Out
+              </button>
 
-                <div className="border-t border-gray-700 my-1"></div>
+              <div className="border-t border-gray-700 my-1" />
 
-                <div className="flex items-center gap-2 px-3 py-2 text-xs text-gray-400">
-                  <Clock size={14} className="text-[#44ff9a]" />
-                  Last Synced:{" "}
-                  <span className="text-gray-200">{formatLastSync(lastSynced)}</span>
-                </div>
-              </motion.div>
-            )}
-          </div>
+              <div className="flex items-center gap-2 px-3 py-2 text-xs text-gray-400">
+                <Clock size={14} className="text-[#44ff9a]" />
+                Last Synced:{" "}
+                <span className="text-gray-200">
+                  {lastSynced ? lastSynced.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Never"}
+                </span>
+              </div>
+            </motion.div>
+          )}
         </div>
       </motion.div>
 
@@ -317,43 +261,34 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
           <div key={section.type}>
             <button
               className="w-full flex justify-between items-center mb-3 md:cursor-default md:mb-4"
-              onClick={() => toggleSection(section.type as any)}
+              onClick={() => setOpenSections((p) => ({ ...p, [section.type]: !p[section.type as keyof typeof openSections] }))}
             >
-              <h3
-                className="font-orbitron text-lg"
-                style={{
-                  color: section.color,
-                  textShadow: `0 0 10px ${section.color}66`,
-                }}
-              >
+              <h3 className="font-orbitron text-lg" style={{ color: section.color, textShadow: `0 0 10px ${section.color}66` }}>
                 {section.label}
               </h3>
               <span className="md:hidden">
-                {openSections[section.type as keyof typeof openSections] ? (
-                  <ChevronUp size={18} />
-                ) : (
-                  <ChevronDown size={18} />
-                )}
+                {openSections[section.type as keyof typeof openSections] ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
               </span>
             </button>
 
             <AnimatePresence>
-              {(openSections[section.type as keyof typeof openSections] ||
-                window.innerWidth >= 768) && (
+              {(openSections[section.type as keyof typeof openSections] || window.innerWidth >= 768) && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
                   transition={{ duration: 0.3 }}
+                  className="space-y-2"
                 >
-                  {filtered[section.type as keyof typeof filtered].map((task) => (
+                  {/*  Plain map (typed)  */}
+                  {filtered[section.type as keyof typeof filtered].map((task: Task) => (
                     <motion.div
                       key={task.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="glass-card p-4 flex justify-between items-center mb-2"
+                      className="glass-card p-4 flex justify-between items-center"
                     >
                       <div>
                         <span
@@ -367,35 +302,17 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
                           {task.text}
                         </span>
                         <p className="text-xs text-gray-400 mt-1">
-                          Added by:{" "}
-                          <span className="text-[#3aa0ff]">{task.added_by}</span>{" "}
+                          Added by: <span className="text-[#3aa0ff]">{task.added_by}</span>
                           {task.last_updated_by && (
-                            <>
-                              • Updated by:{" "}
-                              <span className="text-[#9b59b6]">
-                                {task.last_updated_by}
-                              </span>
-                            </>
+                            <> • Updated by: <span className="text-[#9b59b6]">{task.last_updated_by}</span></>
                           )}
                         </p>
                       </div>
-
                       <div className="flex gap-3">
-                        <button
-                          onClick={() => toggleTask(task)}
-                          className="hover:scale-110 transition-transform"
-                        >
-                          <CheckCircle
-                            size={20}
-                            className={
-                              task.done ? "text-[#44ff9a]" : "text-gray-400"
-                            }
-                          />
+                        <button onClick={() => toggleTask(task)} className="hover:scale-110 transition-transform">
+                          <CheckCircle size={20} className={task.done ? "text-[#44ff9a]" : "text-gray-400"} />
                         </button>
-                        <button
-                          onClick={() => deleteTask(task)}
-                          className="hover:scale-110 transition-transform"
-                        >
+                        <button onClick={() => deleteTask(task)} className="hover:scale-110 transition-transform">
                           <Trash2 size={20} className="text-[#ff6b6b]" />
                         </button>
                       </div>
@@ -407,22 +324,6 @@ export default function MainTaskTracker({ user, onSignOut }: Props) {
           </div>
         ))}
       </div>
-
-      {/* Toast */}
-      <AnimatePresence>
-        {showToast && (
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 40 }}
-            transition={{ duration: 0.4 }}
-            className="fixed bottom-6 right-6 bg-[#1e1f26dd] border border-[#44ff9a55] px-4 py-2 rounded-lg shadow-lg text-white font-orbitron text-sm backdrop-blur-md"
-            style={{ textShadow: "0 0 8px #44ff9a" }}
-          >
-            {toastMessage}
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Sync HUD */}
       {syncing && (

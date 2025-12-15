@@ -1,8 +1,6 @@
 {
   "compilerOptions": {
-    /* === Core Settings === */
     "target": "ESNext",
-    "useDefineForClassFields": true,
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "allowJs": false,
     "skipLibCheck": true,
@@ -10,25 +8,15 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-
-    /* === Module Resolution === */
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-
-    /* === React === */
     "jsx": "react-jsx",
-
-    /* === NodeJS + Vite === */
     "types": ["node", "vite/client"],
-
-    /* === Path Aliases (optional) === */
     "baseUrl": "./src",
-    "paths": {
-      "@/*": ["*"]
-    }
+    "paths": { "@/*": ["*"] }
   },
   "include": ["src", "vite.config.ts"],
   "exclude": ["node_modules", "dist"]

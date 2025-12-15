@@ -1,107 +1,54 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <!-- =========================
-         🌐 META & BASIC SETUP
-    ========================== -->
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0a0a0a" />
     <meta name="robots" content="index, follow" />
     <meta name="color-scheme" content="dark light" />
 
-    <!-- =========================
-         ⚡ SEO + SOCIAL METADATA
-    ========================== -->
     <title>AIBBRY’s Task Tracker — Cyberpunk Productivity Hub</title>
-    <meta
-      name="description"
-      content="AIBBRY’s Task Tracker — a cyberpunk-themed task manager synced with Supabase, optimized for speed, sync, and style."
-    />
+    <meta name="description" content="A cyberpunk-themed task manager synced with Supabase, optimised for speed and style." />
     <meta property="og:title" content="AIBBRY’s Task Tracker — Cyberpunk Productivity Hub" />
-    <meta
-      property="og:description"
-      content="Sync your daily, weekly, and shopping tasks seamlessly with a futuristic neon interface powered by Supabase."
-    />
-    <meta property="og:image" content="/backgrounds/city_fire_image.png" />
+    <meta property="og:description" content="Sync your daily, weekly, and shopping tasks seamlessly with a futuristic neon interface powered by Supabase." />
+    <meta property="og:image" content="/backgrounds/city_fire_image.webp" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://life-manager.aibry.shop/" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="AIBBRY’s Task Tracker" />
-    <meta
-      name="twitter:description"
-      content="Cyberpunk-themed productivity dashboard with Supabase sync and cloud backup."
-    />
-    <meta name="twitter:image" content="/backgrounds/city_fire_image.png" />
+    <meta name="twitter:image" content="/backgrounds/city_fire_image.webp" />
 
-    <!-- =========================
-         🎨 FONTS & ICONS
-    ========================== -->
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
 
-    <link
-      rel="preconnect"
-      href="https://fonts.googleapis.com"
-      crossorigin="anonymous"
-    />
-    <link
-      rel="preconnect"
-      href="https://fonts.gstatic.com"
-      crossorigin="anonymous"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@400;600&display=swap"
-      rel="stylesheet"
-    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin="anonymous" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet" />
 
-    <!-- =========================
-         ⚙️ PREFETCH / OPTIMIZATION
-    ========================== -->
-    <link rel="preload" as="image" href="/backgrounds/city_fire_image.png" />
+    <!-- preload WEBP background -->
+    <link rel="preload" as="image" href="/backgrounds/city_fire_image.webp" />
     <link rel="dns-prefetch" href="https://api.supabase.io" />
-    <link rel="dns-prefetch" href="https://vercel.com" />
     <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
 
-    <!-- =========================
-         ⚛️ ENTRY POINT
-    ========================== -->
     <script type="module" src="/src/main.tsx"></script>
   </head>
 
   <body>
     <div id="root"></div>
 
-    <!-- =========================
-         ⚡ FALLBACK + ANALYTICS
-    ========================== -->
     <noscript>
-      <p
-        style="
-          color: #fff;
-          text-align: center;
-          background: #000;
-          padding: 1rem;
-        "
-      >
+      <p style="color: #fff; text-align: center; background: #000; padding: 1rem;">
         JavaScript is required to run AIBBRY’s Task Tracker.
       </p>
     </noscript>
 
-    <!-- =========================
-         ⚙️ SERVICE WORKER REGISTRATION
-    ========================== -->
     <script>
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", () => {
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
           navigator.serviceWorker
-            .register("/sw.js")
-            .then((reg) => console.log("✅ Service Worker registered:", reg.scope))
-            .catch((err) => console.error("❌ Service Worker failed:", err));
+            .register('/sw.js')
+            .then((reg) => console.log('✅ Service Worker registered:', reg.scope))
+            .catch((err) => console.error('❌ Service Worker failed:', err));
         });
       }
     </script>

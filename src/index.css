@@ -1,56 +1,37 @@
 /* ==========================================================
    🌐 index.css — AIBBRY’s Task Tracker Core Styles
 ========================================================== */
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@400;600&display=swap");
-
+/* ----------  Base  ---------- */
 body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
   font-family: "Rajdhani", sans-serif;
   color: #ffffff;
-
-  background-image: url("/backgrounds/city_fire_image.png");
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-position: center center;
-  background-attachment: fixed;
-
-  animation: bgMove 45s ease-in-out infinite alternate;
-  /* 🔧 Fix: remove relative positioning that breaks fixed HUD */
-  position: static;
-  z-index: auto;
+  background: #000; /* fallback */
 }
 
-/* 🔥 Readability overlay (dark but lets fire show through) */
+/* ----------  Background wrapper (behind content)  ---------- */
+.bg-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: -20; /* keeps image behind everything */
+}
+
+/* readability overlay – on top of image but behind text */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.65);
-  z-index: -1;
+  z-index: -10; /* between image and content */
 }
 
-/* 🔥 Cinematic parallax effect */
-@keyframes bgMove {
-  0% {
-    background-position: center center;
-    filter: brightness(0.9);
-  }
-  100% {
-    background-position: center top;
-    filter: brightness(1);
-  }
-}
-
-/* ==========================================================
-   🎨 GLOBAL COLORS & ACCENTS
-========================================================== */
+/* ----------  Design Tokens  ---------- */
 :root {
   --accent-blue: #3aa0ff;
   --accent-purple: #9b59b6;
@@ -59,9 +40,7 @@ body::before {
   --text-muted: #9ca3af;
 }
 
-/* ==========================================================
-   🧊 GLASS CARDS
-========================================================== */
+/* ----------  Glass Card  ---------- */
 .glass-card {
   background: rgba(20, 20, 25, 0.65);
   color: #ffffff;
@@ -76,9 +55,7 @@ body::before {
   box-shadow: 0 0 16px rgba(255, 255, 255, 0.3);
 }
 
-/* ==========================================================
-   🕹 BUTTONS
-========================================================== */
+/* ----------  Buttons  ---------- */
 .neon-button {
   font-family: "Orbitron", sans-serif;
   text-transform: uppercase;
@@ -98,11 +75,8 @@ body::before {
   box-shadow: 0 0 16px rgba(155, 89, 182, 0.35);
 }
 
-/* ==========================================================
-   🧠 INPUTS
-========================================================== */
-input,
-select {
+/* ----------  Inputs  ---------- */
+input, select {
   background: #1e2229;
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #ffffff;
@@ -111,15 +85,12 @@ select {
   font-size: 0.9rem;
   outline: none;
 }
-input:focus,
-select:focus {
+input:focus, select:focus {
   border-color: var(--accent-blue);
   box-shadow: 0 0 6px rgba(58, 160, 255, 0.5);
 }
 
-/* ==========================================================
-   ✨ TEXT UTILITIES
-========================================================== */
+/* ----------  Text Utilities  ---------- */
 .glow-text {
   color: var(--accent-blue);
   text-shadow: 0 0 10px rgba(58, 160, 255, 0.5);
@@ -128,21 +99,15 @@ select:focus {
   color: var(--text-muted);
 }
 
-/* ==========================================================
-   ⚡ FLOATING CLOUD BUTTON GLOW EFFECT
-========================================================== */
+/* ----------  Glow Animation  ---------- */
 @keyframes pulseGlow {
-  0%,
-  100% {
-    box-shadow: 0 0 8px rgba(58, 160, 255, 0.4),
-      0 0 16px rgba(155, 89, 182, 0.3);
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(58, 160, 255, 0.4), 0 0 16px rgba(155, 89, 182, 0.3);
   }
   50% {
-    box-shadow: 0 0 16px rgba(58, 160, 255, 0.7),
-      0 0 28px rgba(155, 89, 182, 0.6);
+    box-shadow: 0 0 16px rgba(58, 160, 255, 0.7), 0 0 28px rgba(155, 89, 182, 0.6);
   }
 }
-
 .cloud-glow {
   animation: pulseGlow 3.5s ease-in-out infinite;
   border-radius: 50%;
@@ -150,6 +115,13 @@ select:focus {
 }
 .cloud-glow:hover {
   transform: scale(1.1);
-  box-shadow: 0 0 18px rgba(58, 160, 255, 0.8),
-    0 0 28px rgba(155, 89, 182, 0.5);
+  box-shadow: 0 0 18px rgba(58, 160, 255, 0.8), 0 0 28px rgba(155, 89, 182, 0.5);
+}
+
+/* ----------  Reduced Motion  ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }
