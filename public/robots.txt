@@ -1,14 +1,7 @@
-# ============================================================
-# 🤖 robots.txt — AIBBRY’s Task Tracker
-# ============================================================
-
 User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /assets/
 Disallow: /_vercel/
-
-# Protect Supabase quota
 Crawl-delay: 5
-
 Sitemap: https://life-manager.aibry.shop/sitemap.xml
